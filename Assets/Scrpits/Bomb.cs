@@ -39,6 +39,7 @@ public class Bomb : MonoBehaviour
 
                 if (GridMap.Instance.IsWall(flameCell))
                 {
+                    GridMap.Instance.DestroyBlock(flameCell);
                     break;
                 }
 

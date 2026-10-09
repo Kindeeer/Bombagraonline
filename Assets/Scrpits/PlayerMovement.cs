@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 public class PlayerMovement : MonoBehaviour
 {
     public Vector2Int startCell = new Vector2Int(1, 1);
-    public float speed = 5f;
+    public float baseSpeed = 5f;
 
     public Vector2Int currentCell;
     Vector2Int targetCell;
@@ -21,6 +21,8 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        float currentSpeed = CalculateSpeed();
+
         if (!isMoving)
         {
             Vector2Int direction = ReadDirection();
@@ -40,7 +42,7 @@ public class PlayerMovement : MonoBehaviour
         if (isMoving)
         {
             Vector3 targetPosition = new Vector3(targetCell.x, targetCell.y, 0);
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, speed * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, currentSpeed * Time.deltaTime);
 
             if (transform.position == targetPosition)
             {
@@ -50,16 +52,29 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    float CalculateSpeed()
+    {
+        TileType tile = GridMap.Instance.GetTileType(currentCell);
+
+        if (tile == TileType.HoneyPuddle)
+        {
+            return baseSpeed * 0.5f; // Miód spowalnia o 50%
+        }
+        if (tile == TileType.SodaPuddle)
+        {
+            return baseSpeed * 1.6f; // Soda przyspiesza o 60%
+        }
+
+        return baseSpeed;
+    }
+
     Vector2Int ReadDirection()
     {
         bool left, right, up, down;
 
 #if ENABLE_INPUT_SYSTEM
         Keyboard k = Keyboard.current;
-        if (k == null)
-        {
-            return Vector2Int.zero;
-        }
+        if (k == null) return Vector2Int.zero;
         left = k.leftArrowKey.isPressed || k.aKey.isPressed;
         right = k.rightArrowKey.isPressed || k.dKey.isPressed;
         up = k.upArrowKey.isPressed || k.wKey.isPressed;

@@ -148,9 +148,38 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 22b19865ce080fc489131665055500d2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridMap
-  squareSprite: {fileID: 7482667652216324306, guid: eae947e188e6fc6468120cfaa11d3720, type: 3}
+  squareSprite: {fileID: 7482667652216324306, guid: 9e2d55f36671138408ed5e9a3b0bb7f1, type: 3}
+  forcedLayout: -1
+  fillBorderLane: 1
+  innerDestructibleDensity: 0.6
+  cookieChance: 65
+  heavyCookieChance: 25
+  honeyBlockChance: 5
+  sodaBlockChance: 5
+  honeyPuddleDuration: 3
+  sodaPuddleDuration: 4
+  solidWallSprite: {fileID: 0}
+  pillarSprite: {fileID: 0}
+  cookieSprite: {fileID: 0}
+  heavyCookieSprite: {fileID: 0}
+  honeyBlockSprite: {fileID: 0}
+  sodaBlockSprite: {fileID: 0}
+  honeyPuddleSprite: {fileID: 0}
+  sodaPuddleSprite: {fileID: 0}
   floorColor: {r: 1, g: 1, b: 1, a: 1}
-  wallColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  borderWallColor: {r: 0.9, g: 0.2, b: 0.3, a: 1}
+  pillarColor: {r: 0.45, g: 0.25, b: 0.15, a: 1}
+  heavyCookieColor: {r: 0.8, g: 0.3, b: 0.6, a: 1}
+  cookieColor: {r: 0.95, g: 0.6, b: 0.8, a: 1}
+  honeyBlockColor: {r: 0.9, g: 0.65, b: 0.1, a: 1}
+  sodaBlockColor: {r: 0.1, g: 0.6, b: 0.9, a: 1}
+  honeyPuddleColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  sodaPuddleColor: {r: 0.4, g: 0.85, b: 1, a: 1}
+  spawnPositions:
+  - {x: 1, y: 1}
+  - {x: 1, y: 13}
+  - {x: 13, y: 1}
+  - {x: 13, y: 13}
 --- !u!4 &391610677
 Transform:
   m_ObjectHideFlags: 0
@@ -297,7 +326,7 @@ Transform:
   m_GameObject: {fileID: 519420028}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7, y: 7, z: -10}
+  m_LocalPosition: {x: 8, y: 8, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -391,7 +420,11 @@ MonoBehaviour:
         m_SelectedSource:
           rid: -2
         m_Provider2DCache:
-          rid: -2
+          rid: 5968693590143008845
+    - rid: 5968693590143008845
+      type: {class: 'Provider2DCache`1[[UnityEngine.Rendering.Universal.Light2DProvider, Unity.RenderPipelines.Universal.2D.Runtime]]', ns: UnityEngine.Rendering.Universal, asm: Unity.RenderPipelines.Universal.2D.Runtime}
+      data:
+        m_Cache: []
 --- !u!4 &619394802
 Transform:
   m_ObjectHideFlags: 0
@@ -440,7 +473,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   startCell: {x: 1, y: 1}
-  speed: 5
+  baseSpeed: 5
   currentCell: {x: 0, y: 0}
 --- !u!212 &968471024
 SpriteRenderer:
@@ -491,7 +524,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 10
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: -2413806693520163455, guid: 29a76b72944ceb1438d19033fab05a9a, type: 3}
   m_Color: {r: 0.23843002, g: 0.38756984, b: 0.8867924, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -530,7 +563,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBombs
   fuseTime: 2
-  range: 2
+  range: 1
 --- !u!114 &968471027
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -543,7 +576,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dbafd2b469741445bb0a9b461ccd8c7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
-  restartDelay: 2
+  restartDelay: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
