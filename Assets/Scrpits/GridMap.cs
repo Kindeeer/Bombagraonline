@@ -27,6 +27,9 @@ public class GridMap : MonoBehaviour
     [Header("Referencja do Tilemapy")]
     public Tilemap blocksTilemap;
 
+    [Header("Opcjonalna Tilemapa kałuż (rysowana pod graczem)")]
+    public Tilemap effectsTilemap;
+
     [Header("Kafelki z folderu Assets/Tiles")]
     public TileBase borderTile;
     public TileBase pillarTile;
@@ -54,6 +57,9 @@ public class GridMap : MonoBehaviour
     public float honeyPuddleDuration = 2.0f;
     public float sodaPuddleDuration = 2.0f;
 
+    [Header("Ochrona bloku po trafieniu (Sekundy)")]
+    public float blockHitCooldown = 0.5f;
+
     [Header("Start graczy (Rogi planszy)")]
     public Vector2Int[] spawnPositions = new Vector2Int[4]
     {
@@ -69,6 +75,9 @@ public class GridMap : MonoBehaviour
     private int[,] fire = new int[Size, Size];
     private int[,] puddleToken = new int[Size, Size];
     private int nextPuddleToken = 0;
+    private float[,] blockImmuneUntil = new float[Size, Size];
+
+    public event System.Action<Vector2Int, TileType> BlockDestroyed;
 
     private Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
 
@@ -205,30 +214,43 @@ public class GridMap : MonoBehaviour
     {
         Vector3Int tilePos = new Vector3Int(x, y, 0);
         TileType type = grid[x, y];
-        TileBase targetTile = null;
+        TileBase blockTile = null;
+        TileBase puddleTile = null;
 
         switch (type)
         {
-            case TileType.SolidWall: targetTile = borderTile; break;
-            case TileType.Pillar: targetTile = pillarTile; break;
-            case TileType.Cookie: targetTile = cookieTile; break;
-            case TileType.HeavyCookie: targetTile = heavyCookieTile; break;
-            case TileType.HoneyBlock: targetTile = honeyBlockTile; break;
-            case TileType.SodaBlock: targetTile = sodaBlockTile; break;
-            case TileType.HoneyPuddle: targetTile = honeyPuddleTile; break;
-            case TileType.SodaPuddle: targetTile = sodaPuddleTile; break;
-            default: targetTile = null; break;
+            case TileType.SolidWall: blockTile = borderTile; break;
+            case TileType.Pillar: blockTile = pillarTile; break;
+            case TileType.Cookie: blockTile = cookieTile; break;
+            case TileType.HeavyCookie: blockTile = heavyCookieTile; break;
+            case TileType.HoneyBlock: blockTile = honeyBlockTile; break;
+            case TileType.SodaBlock: blockTile = sodaBlockTile; break;
+            case TileType.HoneyPuddle: puddleTile = honeyPuddleTile; break;
+            case TileType.SodaPuddle: puddleTile = sodaPuddleTile; break;
         }
 
-        if (blocksTilemap.GetTile(tilePos) != targetTile)
+        if (effectsTilemap == null)
         {
-            blocksTilemap.SetTile(tilePos, targetTile);
+            SetTileIfDifferent(blocksTilemap, tilePos, blockTile != null ? blockTile : puddleTile);
+            return;
+        }
+
+        SetTileIfDifferent(blocksTilemap, tilePos, blockTile);
+        SetTileIfDifferent(effectsTilemap, tilePos, puddleTile);
+    }
+
+    void SetTileIfDifferent(Tilemap tilemap, Vector3Int position, TileBase tile)
+    {
+        if (tilemap.GetTile(position) != tile)
+        {
+            tilemap.SetTile(position, tile);
         }
     }
 
     public void DestroyBlock(Vector2Int cell)
     {
         if (!InBounds(cell)) return;
+        if (Time.time < blockImmuneUntil[cell.x, cell.y]) return;
 
         TileType current = grid[cell.x, cell.y];
 
@@ -237,16 +259,20 @@ public class GridMap : MonoBehaviour
             case TileType.Cookie:
                 grid[cell.x, cell.y] = TileType.Empty;
                 UpdateTileVisual(cell.x, cell.y);
+                BlockDestroyed?.Invoke(cell, current);
                 break;
             case TileType.HeavyCookie:
                 grid[cell.x, cell.y] = TileType.Cookie;
+                blockImmuneUntil[cell.x, cell.y] = Time.time + blockHitCooldown;
                 UpdateTileVisual(cell.x, cell.y);
                 break;
             case TileType.HoneyBlock:
                 SpreadPuddle(cell, TileType.HoneyPuddle, honeyPuddleDuration);
+                BlockDestroyed?.Invoke(cell, current);
                 break;
             case TileType.SodaBlock:
                 SpreadPuddle(cell, TileType.SodaPuddle, sodaPuddleDuration);
+                BlockDestroyed?.Invoke(cell, current);
                 break;
         }
     }

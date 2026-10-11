@@ -4,8 +4,17 @@ using UnityEngine.SceneManagement;
 public class PlayerHealth : MonoBehaviour
 {
     public float restartDelay = 2f;
+    public SpriteRenderer body;
 
     bool isDead = false;
+
+    void Awake()
+    {
+        if (body == null)
+        {
+            body = GetComponentInChildren<SpriteRenderer>();
+        }
+    }
 
     void Update()
     {
@@ -27,8 +36,8 @@ public class PlayerHealth : MonoBehaviour
     {
         isDead = true;
         GetComponent<PlayerMovement>().enabled = false;
-        GetComponent<PlayerBombs>().enabled = false;
-        GetComponent<SpriteRenderer>().color = Color.red;
+        GetComponent<BombController>().enabled = false;
+        body.color = Color.red;
         Invoke("Restart", restartDelay);
     }
 

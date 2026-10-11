@@ -2,13 +2,20 @@ using UnityEngine;
 
 public class Flame : MonoBehaviour
 {
+    public float duration = 0.45f;
+    public float sortOffsetY = 0.02f;
+
     Vector2Int cell;
     float timeLeft;
+    bool active;
 
-    public void Setup(Vector2Int flameCell, float duration)
+    public void Init(Vector2Int flameCell)
     {
         cell = flameCell;
         timeLeft = duration;
+        active = true;
+
+        transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * sortOffsetY;
         GridMap.Instance.AddFire(cell);
     }
 
@@ -18,8 +25,28 @@ public class Flame : MonoBehaviour
 
         if (timeLeft <= 0f)
         {
-            GridMap.Instance.RemoveFire(cell);
+            Extinguish();
             Destroy(gameObject);
+        }
+    }
+
+    void OnDestroy()
+    {
+        Extinguish();
+    }
+
+    void Extinguish()
+    {
+        if (!active)
+        {
+            return;
+        }
+
+        active = false;
+
+        if (GridMap.Instance != null)
+        {
+            GridMap.Instance.RemoveFire(cell);
         }
     }
 }

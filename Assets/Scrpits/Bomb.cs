@@ -1,21 +1,37 @@
+using System;
 using UnityEngine;
 
 public class Bomb : MonoBehaviour
 {
-    Vector2Int cell;
+    public Flame flamePrefab;
+    public float chainDelay = 0.08f;
+    public float sortOffsetY = 0.02f;
+
+    public event Action<Bomb> Exploded;
+    public Vector2Int Cell { get; private set; }
+
     float timeLeft;
     int range;
+    bool hasExploded;
 
-    public void Setup(Vector2Int bombCell, float fuseTime, int blastRange)
+    public void Init(Vector2Int cell, float fuseTime, int blastRange)
     {
-        cell = bombCell;
+        Cell = cell;
         timeLeft = fuseTime;
         range = blastRange;
+
+        transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * sortOffsetY;
         GridMap.Instance.SetBomb(cell, true);
+        BombRegistry.Register(this);
     }
 
     void Update()
     {
+        if (hasExploded)
+        {
+            return;
+        }
+
         timeLeft -= Time.deltaTime;
 
         if (timeLeft <= 0f)
@@ -24,44 +40,47 @@ public class Bomb : MonoBehaviour
         }
     }
 
-    void Explode()
+    void OnDestroy()
     {
-        GridMap.Instance.SetBomb(cell, false);
-        SpawnFlame(cell);
-
-        Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
-
-        foreach (Vector2Int direction in directions)
-        {
-            for (int i = 1; i <= range; i++)
-            {
-                Vector2Int flameCell = cell + direction * i;
-
-                if (GridMap.Instance.IsWall(flameCell))
-                {
-                    GridMap.Instance.DestroyBlock(flameCell);
-                    break;
-                }
-
-                SpawnFlame(flameCell);
-            }
-        }
-
-        Destroy(gameObject);
+        BombRegistry.Unregister(this);
     }
 
-    void SpawnFlame(Vector2Int flameCell)
+    public void Trigger()
     {
-        GameObject flame = new GameObject("Flame");
-        // Wycentrowanie ognia na kafelku
-        flame.transform.position = GridMap.Instance.GridToWorld(flameCell);
-        flame.transform.localScale = new Vector3(0.9f, 0.9f, 1f);
+        if (hasExploded)
+        {
+            return;
+        }
 
-        SpriteRenderer sr = flame.AddComponent<SpriteRenderer>();
-        sr.sprite = GridMap.Instance.squareSprite;
-        sr.color = new Color(1f, 0.5f, 0f);
-        sr.sortingOrder = 4;
+        timeLeft = Mathf.Min(timeLeft, chainDelay);
+    }
 
-        flame.AddComponent<Flame>().Setup(flameCell, 0.4f);
+    void Explode()
+    {
+        hasExploded = true;
+
+        BombRegistry.Unregister(this);
+        GridMap.Instance.SetBomb(Cell, false);
+
+        BlastResult blast = BlastCalculator.Calculate(Cell, range);
+
+        foreach (Vector2Int cell in blast.flameCells)
+        {
+            Flame flame = Instantiate(flamePrefab);
+            flame.Init(cell);
+        }
+
+        foreach (Vector2Int cell in blast.blocksToDestroy)
+        {
+            GridMap.Instance.DestroyBlock(cell);
+        }
+
+        foreach (Bomb other in blast.bombsToTrigger)
+        {
+            other.Trigger();
+        }
+
+        Exploded?.Invoke(this);
+        Destroy(gameObject);
     }
 }
