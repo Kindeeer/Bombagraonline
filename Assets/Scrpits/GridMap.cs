@@ -25,10 +25,9 @@ public class GridMap : MonoBehaviour
 
     [Header("Układ mapy")]
     public int forcedLayout = -1;
-    public bool fillBorderLane = true;
 
-    [Header("Gęstość bloków niszczalnych")]
-    [Range(0.40f, 0.80f)] public float innerDestructibleDensity = 0.60f;
+    [Header("Pola z kropką (może będzie blok, może nie)")]
+    [Range(0.00f, 1.00f)] public float dotCellBlockChance = 0.50f;
 
     [Header("Szanse na rodzaje bloków niszczalnych (%)")]
     [Range(0, 100)] public int cookieChance = 65;
@@ -74,91 +73,86 @@ public class GridMap : MonoBehaviour
     private SpriteRenderer[,] tileRenderers = new SpriteRenderer[Size, Size];
     private bool[,] bombs = new bool[Size, Size];
     private int[,] fire = new int[Size, Size];
+    private int[,] puddleToken = new int[Size, Size];
+    private int nextPuddleToken = 0;
 
     private Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
-    // Znak	Znaczenie
-    /*
-    #	niezniszczalny filar (pomarańczowy domek)
-    C	środek 3x3 (na razie też filar, później wypluwacz rzeczy)
-    B	zawsze blok niszczalny (pas przy borderze)
-    .	losowo: blok niszczalny albo puste (szansa z innerDestructibleDensity)
-    -	zawsze puste (miejsca startu)
-    */
+
     private string[][] layouts =
-{
-    new string[]
     {
-        "---BBBBBBBBB---",
-        "-#.B###B#B##.#-",
-        "-#....#.#....#-",
-        "B#.##.#.#.##.BB",
-        "B#....#.#....#B",
-        "B#.##.....##.#B",
-        "BB....CCC....BB",
-        "BB.##.CCC.##.#B",
-        "B#....CCC....#B",
-        "B#.##.....##.BB",
-        "BB....#.#....#B",
-        "B#.##.#.#.##.#B",
-        "-#....#.#....#-",
-        "-#.#########.#-",
-        "---BBBBBBBBB---"
-    },
-    new string[]
-    {
-        "---BBBBBBBBB---",
-        "-#.##.###.##.#-",
-        "-#...........#-",
-        "B#.#B.###.B#.#B",
-        "B#...#...#...#B",
-        "B#.#B.#.#.B#.#B",
-        "B#....CCC....#B",
-        "B#.##.CCC.##.#B",
-        "B#....CCC....#B",
-        "B#.##.#.#.##.#B",
-        "B#...B...B...#B",
-        "B#.##.###.##.#B",
-        "-#...........#-",
-        "-#.##.###.##.#-",
-        "---BBBBBBBBB---"
-    },
-    new string[]
-    {
-        "---BBBBBBBBB---",
-        "-######.######-",
-        "-#...........#-",
-        "B#.###BB####.BB",
-        "B#.#.......#.#B",
-        "BB.#.#####.#.#B",
-        "B#...#CCC#...BB",
-        "B###.#CCC#.###B",
-        "BB...#CCC#...#B",
-        "B#.#.#####.#.#B",
-        "B#.#.......#.BB",
-        "BB.#########.#B",
-        "-#...........#-",
-        "-######.######-",
-        "---BBBBBBBBB---"
-    },
-    new string[]
-    {
-        "---BBBBBBBBB---",
-        "-#.##..#..##.#-",
-        "-#.....#.....#-",
-        "B#.B##.#.###.#B",
-        "B##.........B#B",
-        "BBB.######..##B",
-        "B#...#CCC#...#B",
-        "B###.#CCC#.###B",
-        "BB...#CCC#...BB",
-        "B##..#####..#BB",
-        "B##.........##B",
-        "BB.###...###.#B",
-        "-#.....#.....#-",
-        "-#.##.....##.#-",
-        "---BBBBBBBBB---"
-    }
-};
+        new string[]
+        {
+            "--BBBB.BBBBBB--",
+            "-#B#B#.###B###-",
+            "-.B#BBBBBBB#BB-",
+            "BBB#BB.BBB.#BBB",
+            "B#BBB.BBBBB#BBB",
+            "BBBBBBBBBBBBB#B",
+            "B##BBBCCCBBBBBB",
+            "BBBBBBCCCBBBBBB",
+            "B###BBCCCB##BB-",
+            "BBBBBBBBB.BBBBB",
+            "B#.###.BB###B#B",
+            "BBB#.B.BB.B#BBB",
+            "BB.#BBBBBBB#BB-",
+            "-B##B#BB##B##B-",
+            "---BBBB.BBBB---"
+        },
+        new string[]
+        {
+            "--BBB.BBBBB.---",
+            "-B#BB##BB#.B##-",
+            "-BBBBB.BBBBBB#B",
+            "BBBBBBBBBBBBB#B",
+            "B#B##B#BBB##B#B",
+            "BBBB.BBBBBBBBBB",
+            ".B#B#.CCCB#B##B",
+            "BBBBBBCCC.BBBBB",
+            "B.###BCCCBB###B",
+            "BBBB.BBBBBBBBBB",
+            "B#B#BB#B#B.#B#B",
+            "B#B#BB#.#BB#B#B",
+            "B#BBBBBBBBBB.B-",
+            "-###BBB#BBBB##-",
+            "---BB###BBBBB--"
+        },
+        new string[]
+        {
+            "--BBB.BBBBBB---",
+            "-B.##B#B#BB#.#-",
+            "-#BBBB.BBBB..BB",
+            "B#.B#B##BBBBBB.",
+            "B##B#BBBBB#B#BB",
+            "BB###BBBBB#B#BB",
+            "B##B#BCCCB#BBBB",
+            "BBBBBBCCCBBBBBB",
+            "B##B#.CCCB#B##B",
+            "BB#B#BBBBB#BBB.",
+            "BB#B#.BBBB#BBBB",
+            "B##B.B#B#BBB#BB",
+            "BBBBBBBBBBBBBB-",
+            "-#B#B.#.#B##B#-",
+            "---BBBBB.BBBB--"
+        },
+        new string[]
+        {
+            "--B##B.BBB#B---",
+            "-BBBBB#B..BBBB-",
+            "-#B##.BB.B.###B",
+            "BBB.BBBBBBB-BBB",
+            "#BB.#BBBBB#-#B#",
+            "#BB.#.BBBB#-#B#",
+            "#BB-B.CCCBB-BBB",
+            "BBB.BBCCCBB-BBB",
+            "#BBB#BCCCBB-BBB",
+            "#.#B#BBBBB#-#B#",
+            "#B#.#BBBBB#-#B#",
+            "BBB.BB###BB-B.B",
+            "B##B#BB.BB##B#-",
+            "-#BBBBBB#BBBB.-",
+            "---B#BBBBB##B--"
+        }
+    };
 
     void Awake()
     {
@@ -220,10 +214,10 @@ public class GridMap : MonoBehaviour
                 return TileType.Pillar;
 
             case 'B':
-                return fillBorderLane ? PickBlock(x, y) : TileType.Empty;
+                return PickBlock(x, y);
 
             case '.':
-                return Random.value < innerDestructibleDensity ? PickBlock(x, y) : TileType.Empty;
+                return Random.value < dotCellBlockChance ? PickBlock(x, y) : TileType.Empty;
         }
         return TileType.Empty;
     }
@@ -382,24 +376,55 @@ public class GridMap : MonoBehaviour
                 UpdateTileVisual(cell.x, cell.y);
                 break;
             case TileType.HoneyBlock:
-                SpawnPuddle(cell, TileType.HoneyPuddle, honeyPuddleDuration);
+                SpreadPuddle(cell, TileType.HoneyPuddle, honeyPuddleDuration);
                 break;
             case TileType.SodaBlock:
-                SpawnPuddle(cell, TileType.SodaPuddle, sodaPuddleDuration);
+                SpreadPuddle(cell, TileType.SodaPuddle, sodaPuddleDuration);
                 break;
         }
     }
 
-    void SpawnPuddle(Vector2Int cell, TileType puddleType, float duration)
+    void SpreadPuddle(Vector2Int center, TileType puddleType, float duration)
     {
-        grid[cell.x, cell.y] = puddleType;
-        UpdateTileVisual(cell.x, cell.y);
-        StartCoroutine(RemovePuddleAfterTime(cell, duration));
+        SetPuddle(center, puddleType, duration);
+
+        foreach (Vector2Int direction in directions)
+        {
+            Vector2Int neighbor = center + direction;
+
+            if (InBounds(neighbor) && CanHoldPuddle(neighbor))
+            {
+                SetPuddle(neighbor, puddleType, duration);
+            }
+        }
     }
 
-    IEnumerator RemovePuddleAfterTime(Vector2Int cell, float duration)
+    bool CanHoldPuddle(Vector2Int cell)
+    {
+        TileType type = grid[cell.x, cell.y];
+        return type == TileType.Empty || type == TileType.HoneyPuddle || type == TileType.SodaPuddle;
+    }
+
+    void SetPuddle(Vector2Int cell, TileType puddleType, float duration)
+    {
+        nextPuddleToken++;
+        int token = nextPuddleToken;
+
+        puddleToken[cell.x, cell.y] = token;
+        grid[cell.x, cell.y] = puddleType;
+        UpdateTileVisual(cell.x, cell.y);
+
+        StartCoroutine(RemovePuddleAfterTime(cell, duration, token));
+    }
+
+    IEnumerator RemovePuddleAfterTime(Vector2Int cell, float duration, int token)
     {
         yield return new WaitForSeconds(duration);
+
+        if (puddleToken[cell.x, cell.y] != token)
+        {
+            yield break;
+        }
 
         if (grid[cell.x, cell.y] == TileType.HoneyPuddle || grid[cell.x, cell.y] == TileType.SodaPuddle)
         {
