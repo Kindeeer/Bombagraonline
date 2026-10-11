@@ -1,15 +1,16 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 public enum TileType
 {
-    Empty,          // Różowa podłoga
-    SolidWall,      // Ciemnoszara obramówka mapy (Krawędzie)
-    Pillar,         // Niezniszczalny domek / filar
-    Cookie,         // Zwykłe ciastko / Krasnal (1 wybuch)
-    HeavyCookie,    // Gruba czekolada / Wafel (2 wybuchy)
-    HoneyBlock,     // Blok miodu (Tworzy kałużę miodu)
-    SodaBlock,      // Blok sody (Tworzy kałużę sody)
+    Empty,          // Podłoga
+    SolidWall,      // Obramówka mapy
+    Pillar,         // Niezniszczalny filar
+    Cookie,         // Zwykłe ciastko (1 wybuch)
+    HeavyCookie,    // Gruba czekolada (2 wybuchy)
+    HoneyBlock,     // Blok miodu
+    SodaBlock,      // Blok sody
     HoneyPuddle,    // Kałuża miodu
     SodaPuddle      // Kałuża sody
 }
@@ -20,14 +21,28 @@ public class GridMap : MonoBehaviour
 
     public const int Size = 17;
 
-    [Header("Domyślny Sprite (Kwadrat)")]
+    [Header("Domyślny Sprite (Używany dla Bomb i Płomieni)")]
     public Sprite squareSprite;
 
-    [Header("Układ mapy")]
-    public int forcedLayout = -1;
+    [Header("Referencja do Tilemapy")]
+    public Tilemap blocksTilemap;
 
-    [Header("Pola z kropką (może będzie blok, może nie)")]
-    [Range(0.00f, 1.00f)] public float dotCellBlockChance = 0.50f;
+    [Header("Kafelki z folderu Assets/Tiles")]
+    public TileBase borderTile;
+    public TileBase pillarTile;
+    public TileBase cookieTile;
+    public TileBase heavyCookieTile;
+    public TileBase honeyBlockTile;
+    public TileBase sodaBlockTile;
+    public TileBase honeyPuddleTile;
+    public TileBase sodaPuddleTile;
+
+    [Header("Kafelek bezpiecznej strefy (Brak spawnu bloków)")]
+    public TileBase noSpawnTile; // Namaluj nim respy na Tilemapie!
+
+    [Header("Generowanie bloków niszczalnych w korytarzach")]
+    public bool fillEmptyPathsWithBlocks = true;
+    [Range(0.00f, 1.00f)] public float blockSpawnChance = 0.70f;
 
     [Header("Szanse na rodzaje bloków niszczalnych (%)")]
     [Range(0, 100)] public int cookieChance = 65;
@@ -39,28 +54,7 @@ public class GridMap : MonoBehaviour
     public float honeyPuddleDuration = 2.0f;
     public float sodaPuddleDuration = 2.0f;
 
-    [Header("Opcjonalne własne grafiki (Sprites)")]
-    public Sprite solidWallSprite;
-    public Sprite pillarSprite;
-    public Sprite cookieSprite;
-    public Sprite heavyCookieSprite;
-    public Sprite honeyBlockSprite;
-    public Sprite sodaBlockSprite;
-    public Sprite honeyPuddleSprite;
-    public Sprite sodaPuddleSprite;
-
-    [Header("Paleta Kolorów (Bomb It Style)")]
-    public Color floorColor = new Color(0.95f, 0.78f, 0.88f);
-    public Color borderWallColor = new Color(0.25f, 0.25f, 0.25f);
-    public Color pillarColor = new Color(0.88f, 0.38f, 0.15f);
-    public Color heavyCookieColor = new Color(0.45f, 0.22f, 0.08f);
-    public Color cookieColor = new Color(0.98f, 0.55f, 0.75f);
-    public Color honeyBlockColor = new Color(1f, 0.8f, 0.1f);
-    public Color sodaBlockColor = new Color(0.15f, 0.65f, 0.95f);
-    public Color honeyPuddleColor = new Color(1f, 0.9f, 0.45f);
-    public Color sodaPuddleColor = new Color(0.55f, 0.88f, 1f);
-
-    [Header("Start graczy (Rogi planszy 15x15)")]
+    [Header("Start graczy (Rogi planszy)")]
     public Vector2Int[] spawnPositions = new Vector2Int[4]
     {
         new Vector2Int(1, 1),
@@ -70,7 +64,7 @@ public class GridMap : MonoBehaviour
     };
 
     private TileType[,] grid = new TileType[Size, Size];
-    private SpriteRenderer[,] tileRenderers = new SpriteRenderer[Size, Size];
+    private bool[,] reservedCells = new bool[Size, Size]; // Tablica zablokowanych pól
     private bool[,] bombs = new bool[Size, Size];
     private int[,] fire = new int[Size, Size];
     private int[,] puddleToken = new int[Size, Size];
@@ -78,148 +72,92 @@ public class GridMap : MonoBehaviour
 
     private Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
 
-    private string[][] layouts =
-    {
-        new string[]
-        {
-            "--BBBB.BBBBBB--",
-            "-#B#B#.###B###-",
-            "-.B#BBBBBBB#BB-",
-            "BBB#BB.BBB.#BBB",
-            "B#BBB.BBBBB#BBB",
-            "BBBBBBBBBBBBB#B",
-            "B##BBBCCCBBBBBB",
-            "BBBBBBCCCBBBBBB",
-            "B###BBCCCB##BB-",
-            "BBBBBBBBB.BBBBB",
-            "B#.###.BB###B#B",
-            "BBB#.B.BB.B#BBB",
-            "BB.#BBBBBBB#BB-",
-            "-B##B#BB##B##B-",
-            "---BBBB.BBBB---"
-        },
-        new string[]
-        {
-            "--BBB.BBBBB.---",
-            "-B#BB##BB#.B##-",
-            "-BBBBB.BBBBBB#B",
-            "BBBBBBBBBBBBB#B",
-            "B#B##B#BBB##B#B",
-            "BBBB.BBBBBBBBBB",
-            ".B#B#.CCCB#B##B",
-            "BBBBBBCCC.BBBBB",
-            "B.###BCCCBB###B",
-            "BBBB.BBBBBBBBBB",
-            "B#B#BB#B#B.#B#B",
-            "B#B#BB#.#BB#B#B",
-            "B#BBBBBBBBBB.B-",
-            "-###BBB#BBBB##-",
-            "---BB###BBBBB--"
-        },
-        new string[]
-        {
-            "--BBB.BBBBBB---",
-            "-B.##B#B#BB#.#-",
-            "-#BBBB.BBBB..BB",
-            "B#.B#B##BBBBBB.",
-            "B##B#BBBBB#B#BB",
-            "BB###BBBBB#B#BB",
-            "B##B#BCCCB#BBBB",
-            "BBBBBBCCCBBBBBB",
-            "B##B#.CCCB#B##B",
-            "BB#B#BBBBB#BBB.",
-            "BB#B#.BBBB#BBBB",
-            "B##B.B#B#BBB#BB",
-            "BBBBBBBBBBBBBB-",
-            "-#B#B.#.#B##B#-",
-            "---BBBBB.BBBB--"
-        },
-        new string[]
-        {
-            "--B##B.BBB#B---",
-            "-BBBBB#B..BBBB-",
-            "-#B##.BB.B.###B",
-            "BBB.BBBBBBB-BBB",
-            "#BB.#BBBBB#-#B#",
-            "#BB.#.BBBB#-#B#",
-            "#BB-B.CCCBB-BBB",
-            "BBB.BBCCCBB-BBB",
-            "#BBB#BCCCBB-BBB",
-            "#.#B#BBBBB#-#B#",
-            "#B#.#BBBBB#-#B#",
-            "BBB.BB###BB-B.B",
-            "B##B#BB.BB##B#-",
-            "-#BBBBBB#BBBB.-",
-            "---B#BBBBB##B--"
-        }
-    };
-
     void Awake()
     {
         Instance = this;
-        BuildMap();
+        BuildMapFromTilemap();
     }
 
-    public void BuildMap()
+    public Vector3 GridToWorld(Vector2Int cell)
     {
-        int index = Random.Range(0, layouts.Length);
-
-        if (forcedLayout >= 0 && forcedLayout < layouts.Length)
-        {
-            index = forcedLayout;
-        }
-
-        GenerateGridData(layouts[index]);
-        CreateAllTileVisuals();
+        return new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
     }
 
-    void GenerateGridData(string[] layout)
+    public Vector2Int WorldToGrid(Vector3 worldPos)
     {
-        int inner = Size - 2;
+        return new Vector2Int(Mathf.FloorToInt(worldPos.x), Mathf.FloorToInt(worldPos.y));
+    }
 
-        if (layout.Length != inner || layout[0].Length != inner)
+    public void BuildMapFromTilemap()
+    {
+        if (blocksTilemap == null)
         {
-            Debug.LogError("Układ mapy musi mieć " + inner + " wierszy po " + inner + " znaków.");
+            Debug.LogError("Brak przypisanej Blocks Tilemap w skrypcie GridMap!");
             return;
         }
 
+        // 1. Odczytaj kafelki z namalowanej Tilemapy
         for (int x = 0; x < Size; x++)
         {
             for (int y = 0; y < Size; y++)
             {
-                bool isBorder = x == 0 || y == 0 || x == Size - 1 || y == Size - 1;
-                grid[x, y] = isBorder ? TileType.SolidWall : TileType.Empty;
+                Vector3Int tilePos = new Vector3Int(x, y, 0);
+                TileBase currentTile = blocksTilemap.GetTile(tilePos);
+
+                if (currentTile == borderTile) grid[x, y] = TileType.SolidWall;
+                else if (currentTile == pillarTile) grid[x, y] = TileType.Pillar;
+                else if (currentTile == cookieTile) grid[x, y] = TileType.Cookie;
+                else if (currentTile == heavyCookieTile) grid[x, y] = TileType.HeavyCookie;
+                else if (currentTile == honeyBlockTile) grid[x, y] = TileType.HoneyBlock;
+                else if (currentTile == sodaBlockTile) grid[x, y] = TileType.SodaBlock;
+                else if (currentTile == noSpawnTile)
+                {
+                    // Zapamiętaj pole jako zarezerwowane i wyczyść widok kafelka-wskaźnika
+                    grid[x, y] = TileType.Empty;
+                    reservedCells[x, y] = true;
+                    blocksTilemap.SetTile(tilePos, null);
+                }
+                else grid[x, y] = TileType.Empty;
             }
         }
 
-        for (int row = 0; row < inner; row++)
+        // 2. Wypełnij wolne miejsce blokami
+        if (fillEmptyPathsWithBlocks)
         {
-            for (int col = 0; col < inner; col++)
+            GenerateDestructibleBlocks();
+        }
+    }
+
+    void GenerateDestructibleBlocks()
+    {
+        for (int x = 1; x < Size - 1; x++)
+        {
+            for (int y = 1; y < Size - 1; y++)
             {
-                int x = col + 1;
-                int y = Size - 2 - row;
-                grid[x, y] = TileFromSymbol(layout[row][col], x, y);
+                // Nie stawiaj bloków na polach zarezerwowanych kafelkiem NoSpawn oraz wokół pozycji startowych
+                if (grid[x, y] == TileType.Empty && !reservedCells[x, y] && !IsPlayerSpawnArea(x, y))
+                {
+                    if (Random.value < blockSpawnChance)
+                    {
+                        TileType randomBlock = PickBlock(x, y);
+                        grid[x, y] = randomBlock;
+                        UpdateTileVisual(x, y);
+                    }
+                }
             }
         }
     }
 
-    TileType TileFromSymbol(char symbol, int x, int y)
+    bool IsPlayerSpawnArea(int x, int y)
     {
-        switch (symbol)
+        foreach (Vector2Int spawn in spawnPositions)
         {
-            case '#':
-                return TileType.Pillar;
-
-            case 'C':
-                return TileType.Pillar;
-
-            case 'B':
-                return PickBlock(x, y);
-
-            case '.':
-                return Random.value < dotCellBlockChance ? PickBlock(x, y) : TileType.Empty;
+            if (Mathf.Abs(spawn.x - x) <= 1 && Mathf.Abs(spawn.y - y) <= 1)
+            {
+                return true;
+            }
         }
-        return TileType.Empty;
+        return false;
     }
 
     TileType PickBlock(int x, int y)
@@ -227,13 +165,10 @@ public class GridMap : MonoBehaviour
         TileType type = GetRandomDestructibleBlock();
 
         if (type == TileType.HoneyBlock && HasNeighbor(x, y, TileType.SodaBlock))
-        {
             return TileType.Cookie;
-        }
         if (type == TileType.SodaBlock && HasNeighbor(x, y, TileType.HoneyBlock))
-        {
             return TileType.Cookie;
-        }
+
         return type;
     }
 
@@ -242,11 +177,8 @@ public class GridMap : MonoBehaviour
         foreach (Vector2Int direction in directions)
         {
             Vector2Int neighbor = new Vector2Int(x, y) + direction;
-
             if (InBounds(neighbor) && grid[neighbor.x, neighbor.y] == type)
-            {
                 return true;
-            }
         }
         return false;
     }
@@ -258,104 +190,39 @@ public class GridMap : MonoBehaviour
 
         int roll = Random.Range(0, totalWeight);
 
-        if (roll < cookieChance)
-            return TileType.Cookie;
-
+        if (roll < cookieChance) return TileType.Cookie;
         roll -= cookieChance;
-        if (roll < heavyCookieChance)
-            return TileType.HeavyCookie;
 
+        if (roll < heavyCookieChance) return TileType.HeavyCookie;
         roll -= heavyCookieChance;
-        if (roll < honeyBlockChance)
-            return TileType.HoneyBlock;
+
+        if (roll < honeyBlockChance) return TileType.HoneyBlock;
 
         return TileType.SodaBlock;
     }
 
-    void CreateAllTileVisuals()
+    public void UpdateTileVisual(int x, int y)
     {
-        for (int x = 0; x < Size; x++)
-        {
-            for (int y = 0; y < Size; y++)
-            {
-                if (tileRenderers[x, y] == null)
-                {
-                    GameObject tile = new GameObject($"Tile_{x}_{y}");
-                    tile.transform.parent = transform;
-                    tile.transform.position = new Vector3(x, y, 0);
-
-                    SpriteRenderer sr = tile.AddComponent<SpriteRenderer>();
-                    tileRenderers[x, y] = sr;
-                }
-
-                UpdateTileVisual(x, y);
-            }
-        }
-    }
-
-    void UpdateTileVisual(int x, int y)
-    {
+        Vector3Int tilePos = new Vector3Int(x, y, 0);
         TileType type = grid[x, y];
-        SpriteRenderer sr = tileRenderers[x, y];
-        if (sr == null) return;
-
-        sr.sprite = squareSprite;
-        sr.color = Color.white;
+        TileBase targetTile = null;
 
         switch (type)
         {
-            case TileType.SolidWall:
-                if (solidWallSprite != null) sr.sprite = solidWallSprite;
-                else sr.color = borderWallColor;
-                sr.sortingOrder = 3;
-                break;
+            case TileType.SolidWall: targetTile = borderTile; break;
+            case TileType.Pillar: targetTile = pillarTile; break;
+            case TileType.Cookie: targetTile = cookieTile; break;
+            case TileType.HeavyCookie: targetTile = heavyCookieTile; break;
+            case TileType.HoneyBlock: targetTile = honeyBlockTile; break;
+            case TileType.SodaBlock: targetTile = sodaBlockTile; break;
+            case TileType.HoneyPuddle: targetTile = honeyPuddleTile; break;
+            case TileType.SodaPuddle: targetTile = sodaPuddleTile; break;
+            default: targetTile = null; break;
+        }
 
-            case TileType.Pillar:
-                if (pillarSprite != null) sr.sprite = pillarSprite;
-                else sr.color = pillarColor;
-                sr.sortingOrder = 3;
-                break;
-
-            case TileType.Cookie:
-                if (cookieSprite != null) sr.sprite = cookieSprite;
-                else sr.color = cookieColor;
-                sr.sortingOrder = 2;
-                break;
-
-            case TileType.HeavyCookie:
-                if (heavyCookieSprite != null) sr.sprite = heavyCookieSprite;
-                else sr.color = heavyCookieColor;
-                sr.sortingOrder = 2;
-                break;
-
-            case TileType.HoneyBlock:
-                if (honeyBlockSprite != null) sr.sprite = honeyBlockSprite;
-                else sr.color = honeyBlockColor;
-                sr.sortingOrder = 2;
-                break;
-
-            case TileType.SodaBlock:
-                if (sodaBlockSprite != null) sr.sprite = sodaBlockSprite;
-                else sr.color = sodaBlockColor;
-                sr.sortingOrder = 2;
-                break;
-
-            case TileType.HoneyPuddle:
-                if (honeyPuddleSprite != null) sr.sprite = honeyPuddleSprite;
-                else sr.color = honeyPuddleColor;
-                sr.sortingOrder = 0;
-                break;
-
-            case TileType.SodaPuddle:
-                if (sodaPuddleSprite != null) sr.sprite = sodaPuddleSprite;
-                else sr.color = sodaPuddleColor;
-                sr.sortingOrder = 0;
-                break;
-
-            default:
-                sr.color = floorColor;
-                sr.sortingOrder = 0;
-                break;
+        if (blocksTilemap.GetTile(tilePos) != targetTile)
+        {
+            blocksTilemap.SetTile(tilePos, targetTile);
         }
     }
 
@@ -391,7 +258,6 @@ public class GridMap : MonoBehaviour
         foreach (Vector2Int direction in directions)
         {
             Vector2Int neighbor = center + direction;
-
             if (InBounds(neighbor) && CanHoldPuddle(neighbor))
             {
                 SetPuddle(neighbor, puddleType, duration);
@@ -421,10 +287,7 @@ public class GridMap : MonoBehaviour
     {
         yield return new WaitForSeconds(duration);
 
-        if (puddleToken[cell.x, cell.y] != token)
-        {
-            yield break;
-        }
+        if (puddleToken[cell.x, cell.y] != token) yield break;
 
         if (grid[cell.x, cell.y] == TileType.HoneyPuddle || grid[cell.x, cell.y] == TileType.SodaPuddle)
         {
@@ -458,23 +321,8 @@ public class GridMap : MonoBehaviour
         return cell.x >= 0 && cell.y >= 0 && cell.x < Size && cell.y < Size;
     }
 
-    public void SetBomb(Vector2Int cell, bool hasBomb)
-    {
-        bombs[cell.x, cell.y] = hasBomb;
-    }
-
-    public void AddFire(Vector2Int cell)
-    {
-        fire[cell.x, cell.y]++;
-    }
-
-    public void RemoveFire(Vector2Int cell)
-    {
-        fire[cell.x, cell.y]--;
-    }
-
-    public bool IsOnFire(Vector2Int cell)
-    {
-        return InBounds(cell) && fire[cell.x, cell.y] > 0;
-    }
+    public void SetBomb(Vector2Int cell, bool hasBomb) => bombs[cell.x, cell.y] = hasBomb;
+    public void AddFire(Vector2Int cell) => fire[cell.x, cell.y]++;
+    public void RemoveFire(Vector2Int cell) => fire[cell.x, cell.y]--;
+    public bool IsOnFire(Vector2Int cell) => InBounds(cell) && fire[cell.x, cell.y] > 0;
 }

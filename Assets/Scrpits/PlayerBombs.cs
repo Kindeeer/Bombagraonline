@@ -8,6 +8,9 @@ public class PlayerBombs : MonoBehaviour
     public float fuseTime = 2f;
     public int range = 2;
 
+    [Header("Tekstura Bomby z Figmy")]
+    public Sprite bombSprite;
+
     PlayerMovement movement;
     Bomb currentBomb;
 
@@ -36,12 +39,18 @@ public class PlayerBombs : MonoBehaviour
     Bomb PlaceBomb(Vector2Int cell)
     {
         GameObject bombObject = new GameObject("Bomb");
-        bombObject.transform.position = new Vector3(cell.x, cell.y, 0);
-        bombObject.transform.localScale = new Vector3(0.6f, 0.6f, 1f);
+        bombObject.transform.position = GridMap.Instance.GridToWorld(cell);
+
+        // Skala 1f odpowiada rozmiarowi 1 kafelka przy odpowiednim PPU
+        bombObject.transform.localScale = new Vector3(1f, 1f, 1f);
 
         SpriteRenderer sr = bombObject.AddComponent<SpriteRenderer>();
-        sr.sprite = GridMap.Instance.squareSprite;
-        sr.color = Color.black;
+
+        // Użyj tekstury z Figmy (jeśli przypisana) lub czarnego kwadratu z GridMap
+        sr.sprite = bombSprite != null ? bombSprite : GridMap.Instance.squareSprite;
+
+        // Color.white zachowuje oryginalne, ładne kolory z Figmy!
+        sr.color = Color.white;
         sr.sortingOrder = 5;
 
         Bomb bomb = bombObject.AddComponent<Bomb>();

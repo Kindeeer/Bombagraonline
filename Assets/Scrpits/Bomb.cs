@@ -53,7 +53,8 @@ public class Bomb : MonoBehaviour
     void SpawnFlame(Vector2Int flameCell)
     {
         GameObject flame = new GameObject("Flame");
-        flame.transform.position = new Vector3(flameCell.x, flameCell.y, 0);
+        // Wycentrowanie ognia na kafelku
+        flame.transform.position = GridMap.Instance.GridToWorld(flameCell);
         flame.transform.localScale = new Vector3(0.9f, 0.9f, 1f);
 
         SpriteRenderer sr = flame.AddComponent<SpriteRenderer>();

@@ -14,9 +14,8 @@ public class PlayerHealth : MonoBehaviour
             return;
         }
 
-        Vector2Int cell = new Vector2Int(
-            Mathf.RoundToInt(transform.position.x),
-            Mathf.RoundToInt(transform.position.y));
+        // Prawidłowe odczytanie kratki ze środka pozycji gracza (np. z 1.5, 1.5 robimy kratkę 1, 1)
+        Vector2Int cell = GridMap.Instance.WorldToGrid(transform.position);
 
         if (GridMap.Instance.IsOnFire(cell))
         {

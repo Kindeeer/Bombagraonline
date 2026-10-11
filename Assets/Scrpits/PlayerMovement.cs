@@ -16,7 +16,8 @@ public class PlayerMovement : MonoBehaviour
     {
         currentCell = startCell;
         targetCell = startCell;
-        transform.position = new Vector3(startCell.x, startCell.y, 0);
+        // Użycie GridToWorld centruje gracza na pierwszej kratce
+        transform.position = GridMap.Instance.GridToWorld(startCell);
     }
 
     void Update()
@@ -41,7 +42,8 @@ public class PlayerMovement : MonoBehaviour
 
         if (isMoving)
         {
-            Vector3 targetPosition = new Vector3(targetCell.x, targetCell.y, 0);
+            // Prowadź postać do wycentrowanego punktu docelowego
+            Vector3 targetPosition = GridMap.Instance.GridToWorld(targetCell);
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, currentSpeed * Time.deltaTime);
 
             if (transform.position == targetPosition)
@@ -52,44 +54,38 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    Vector2Int ReadDirection()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Vector2 input = Vector2.zero;
+        if (Keyboard.current != null)
+        {
+            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y = 1;
+            else if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y = -1;
+            else if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) input.x = -1;
+            else if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) input.x = 1;
+        }
+#else
+        Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+#endif
+        if (input.x != 0) return new Vector2Int((int)Mathf.Sign(input.x), 0);
+        if (input.y != 0) return new Vector2Int(0, (int)Mathf.Sign(input.y));
+        return Vector2Int.zero;
+    }
+
     float CalculateSpeed()
     {
         TileType tile = GridMap.Instance.GetTileType(currentCell);
 
         if (tile == TileType.HoneyPuddle)
         {
-            return baseSpeed * 0.5f; // Miód spowalnia o 50%
+            return baseSpeed * 0.5f; // Spowolnienie 50%
         }
         if (tile == TileType.SodaPuddle)
         {
-            return baseSpeed * 1.6f; // Soda przyspiesza o 60%
+            return baseSpeed * 1.6f; // Przyspieszenie 60%
         }
 
         return baseSpeed;
-    }
-
-    Vector2Int ReadDirection()
-    {
-        bool left, right, up, down;
-
-#if ENABLE_INPUT_SYSTEM
-        Keyboard k = Keyboard.current;
-        if (k == null) return Vector2Int.zero;
-        left = k.leftArrowKey.isPressed || k.aKey.isPressed;
-        right = k.rightArrowKey.isPressed || k.dKey.isPressed;
-        up = k.upArrowKey.isPressed || k.wKey.isPressed;
-        down = k.downArrowKey.isPressed || k.sKey.isPressed;
-#else
-        left = Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A);
-        right = Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D);
-        up = Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W);
-        down = Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S);
-#endif
-
-        if (up) return Vector2Int.up;
-        if (down) return Vector2Int.down;
-        if (left) return Vector2Int.left;
-        if (right) return Vector2Int.right;
-        return Vector2Int.zero;
     }
 }
