@@ -173,6 +173,26 @@ public static class PickupArt
         }, new Vector4(22f, 22f, 22f, 22f));
     }
 
+    // Złota korona dla lidera punktów. 64 x 48 pikseli.
+    public static Sprite Crown()
+    {
+        return Build("ui_crown", 64, 48, 64f, new Vector2(0.5f, 0.5f), (l, x, y) =>
+        {
+            Color gold = new Color(1f, 0.82f, 0.2f);
+            Color ink = new Color(0.45f, 0.28f, 0.05f);
+
+            // trzy zęby (obrócone kwadraty) i podstawa
+            float spikes = Mathf.Min(RotatedBox(x, y, 10f, 28f, 8f, 8f, 45f),
+                Mathf.Min(RotatedBox(x, y, 32f, 32f, 9f, 9f, 45f), RotatedBox(x, y, 54f, 28f, 8f, 8f, 45f)));
+
+            l.Outlined(Mathf.Min(spikes, RoundBox(x, y, 32f, 14f, 27f, 9f, 3f)), gold, ink, 2f);
+            l.Draw(Circle(x, y, 10f, 38f, 3f), new Color(0.9f, 0.2f, 0.25f));
+            l.Draw(Circle(x, y, 32f, 43f, 3.5f), new Color(0.3f, 0.6f, 1f));
+            l.Draw(Circle(x, y, 54f, 38f, 3f), new Color(0.9f, 0.2f, 0.25f));
+            l.Draw(Box(x, y, 32f, 14f, 24f, 1.5f), new Color(1f, 0.95f, 0.6f, 0.7f));
+        });
+    }
+
     // Klawisz klawiatury: jasna nakładka na ciemniejszym spodzie.
     public static Sprite KeyCap()
     {

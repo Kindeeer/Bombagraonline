@@ -12,6 +12,8 @@ public class GameHud : MonoBehaviour
         public Image background;
         public Image face;
         public Text label;
+        [Tooltip("Korona lidera. Puste = GameHud dorobi ją sam na karcie.")]
+        public Image crown;
     }
 
     [Header("Układ")]
@@ -32,6 +34,8 @@ public class GameHud : MonoBehaviour
     };
     public Sprite faceAlive;
     public Sprite faceDead;
+    [Tooltip("Obrazek korony. Puste = korona rysowana z kodu.")]
+    public Sprite crownSprite;
     public Color cardColor = new Color(0.97f, 0.84f, 0.68f);
     public Color textColor = new Color(0.15f, 0.12f, 0.15f);
     public Color deadColor = new Color(0.85f, 0.15f, 0.15f);
@@ -49,9 +53,12 @@ public class GameHud : MonoBehaviour
     public Text actionBadge;
     public Sprite bombIcon;
 
-    PlayerHealth[] players = new PlayerHealth[0];
-    PlayerPickups[] playerPickups = new PlayerPickups[0];
     PlayerPickups localPickups;
+
+    // ostatnio pokazany stan slotów (0 pusty, 1 żyje, 2 martwy) i wynik, żeby nie budować napisów co klatkę
+    int[] shownState;
+    int[] shownScore;
+    int shownLeader = -2;
 
     Rect lastSafeArea;
     Vector2Int lastScreenSize;
@@ -63,16 +70,10 @@ public class GameHud : MonoBehaviour
 
     void Start()
     {
-        players = FindObjectsByType<PlayerHealth>();
-        playerPickups = new PlayerPickups[players.Length];
-
-        for (int i = 0; i < players.Length; i++)
-        {
-            playerPickups[i] = players[i].GetComponent<PlayerPickups>();
-        }
-
-        // na razie lokalny gracz to pierwszy znaleziony
-        localPickups = playerPickups.Length > 0 ? playerPickups[0] : null;
+        shownState = new int[playerSlots.Length];
+        shownScore = new int[playerSlots.Length];
+        Array.Fill(shownState, -1);
+        EnsureCrowns();
 
         UpdateSafeArea();
 
@@ -91,9 +92,97 @@ public class GameHud : MonoBehaviour
             UpdateSafeArea();
         }
 
-        UpdatePlayers();
+        MatchManager match = MatchManager.Instance;
+
+        // lokalny gracz to slot 0 (boty zajmują kolejne sloty)
+        if (localPickups == null && match != null && match.Slots[0] != null)
+        {
+            localPickups = match.Slots[0].pickups;
+        }
+
+        UpdatePlayers(match);
+        UpdateCrown(match);
         UpdateBuff();
         UpdateAction();
+    }
+
+    // Każda karta gracza dostaje koronę (wyłączoną), jeśli designer nie dodał własnej.
+    void EnsureCrowns()
+    {
+        foreach (PlayerSlot slot in playerSlots)
+        {
+            if (slot == null || slot.face == null || slot.crown != null)
+            {
+                continue;
+            }
+
+            GameObject crownObject = new GameObject("Crown", typeof(RectTransform), typeof(Image));
+            RectTransform rect = crownObject.GetComponent<RectTransform>();
+            rect.SetParent(slot.face.transform.parent, false);
+            // korona siedzi na czubku główki: wyśrodkowana nad buźką, dolna krawędź lekko zachodzi na głowę
+            rect.anchorMin = new Vector2(0.3f, 0.56f);
+            rect.anchorMax = new Vector2(0.7f, 0.84f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            Image image = crownObject.GetComponent<Image>();
+            image.sprite = crownSprite != null ? crownSprite : PickupArt.Crown();
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            image.enabled = false;
+            slot.crown = image;
+        }
+    }
+
+    // Lider to jedyny gracz z największą, dodatnią liczbą punktów. Remis na prowadzeniu: nikt nie ma korony.
+    int FindLeader(MatchManager match)
+    {
+        int leader = -1;
+        int best = 0;
+        bool tie = false;
+
+        for (int i = 0; i < playerSlots.Length && match != null && i < match.Slots.Length; i++)
+        {
+            if (match.Slots[i] == null)
+            {
+                continue;
+            }
+
+            int score = MatchManager.GetScore(i);
+
+            if (score > best)
+            {
+                best = score;
+                leader = i;
+                tie = false;
+            }
+            else if (score == best && best > 0)
+            {
+                tie = true;
+            }
+        }
+
+        return tie ? -1 : leader;
+    }
+
+    void UpdateCrown(MatchManager match)
+    {
+        int leader = FindLeader(match);
+
+        if (leader == shownLeader)
+        {
+            return;
+        }
+
+        shownLeader = leader;
+
+        for (int i = 0; i < playerSlots.Length; i++)
+        {
+            if (playerSlots[i] != null && playerSlots[i].crown != null)
+            {
+                playerSlots[i].crown.enabled = i == leader;
+            }
+        }
     }
 
     void UpdateSafeArea()
@@ -111,7 +200,7 @@ public class GameHud : MonoBehaviour
         safeArea.anchorMax = (lastSafeArea.position + lastSafeArea.size) / screen;
     }
 
-    void UpdatePlayers()
+    void UpdatePlayers(MatchManager match)
     {
         for (int i = 0; i < playerSlots.Length; i++)
         {
@@ -122,22 +211,34 @@ public class GameHud : MonoBehaviour
                 continue;
             }
 
-            PlayerHealth player = i < players.Length ? players[i] : null;
-            Color color = i < playerColors.Length ? playerColors[i] : Color.white;
+            Combatant combatant = match != null && i < match.Slots.Length ? match.Slots[i] : null;
+            int state = combatant == null ? 0 : combatant.IsAlive ? 1 : 2;
+            int score = MatchManager.GetScore(i);
 
-            if (player == null)
+            if (state == shownState[i] && score == shownScore[i])
+            {
+                continue;
+            }
+
+            shownState[i] = state;
+            shownScore[i] = score;
+
+            Color color = match != null && i < match.slotColors.Length ? match.slotColors[i]
+                : i < playerColors.Length ? playerColors[i] : Color.white;
+
+            if (state == 0)
             {
                 // pusty slot: nikt nie gra tym kolorem
                 color.a = emptySlotAlpha;
                 SetSlot(slot, faceAlive, color, new Color(cardColor.r, cardColor.g, cardColor.b, 0.5f), "", textColor);
             }
-            else if (player.IsDead)
+            else if (state == 2)
             {
-                SetSlot(slot, faceDead, color, cardColor, "DEAD", deadColor);
+                SetSlot(slot, faceDead, color, cardColor, "DEAD  " + score, deadColor);
             }
             else
             {
-                SetSlot(slot, faceAlive, color, cardColor, playerPickups[i] == localPickups ? "YOU" : "", textColor);
+                SetSlot(slot, faceAlive, color, cardColor, MatchManager.NameOf(combatant) + "  " + score, textColor);
             }
         }
     }

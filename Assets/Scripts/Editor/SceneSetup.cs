@@ -34,6 +34,7 @@ public static class SceneSetup
 
         AssignPickupIcons();
         CreateFountain();
+        CreateMatchManager();
         CreateHud();
 
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
@@ -110,6 +111,20 @@ public static class SceneSetup
         fountain.AddComponent<ChocolateFountain>();
         Undo.RegisterCreatedObjectUndo(fountain, "Create Fountain");
     }
+    // ---------- Boty i punkty ----------
+
+    static void CreateMatchManager()
+    {
+        if (Object.FindAnyObjectByType<MatchManager>() != null)
+        {
+            return;
+        }
+
+        GameObject manager = new GameObject("MatchManager");
+        manager.AddComponent<MatchManager>();
+        Undo.RegisterCreatedObjectUndo(manager, "Create MatchManager");
+    }
+
     // ---------- HUD ----------
 
     static void CreateHud()

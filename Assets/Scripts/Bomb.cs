@@ -10,6 +10,8 @@ public class Bomb : MonoBehaviour
 
     public event Action<Bomb> Exploded;
     public Vector2Int Cell { get; private set; }
+    public int Range => range;
+    public float TimeLeft => timeLeft;
 
     float timeLeft;
     int range;
@@ -109,6 +111,9 @@ public static class BombRegistry
         }
     }
 
+    // Wszystkie bomby na planszy (do liczenia pól zagrożonych przez boty).
+    public static Dictionary<Vector2Int, Bomb>.ValueCollection All => bombs.Values;
+
     public static bool HasBomb(Vector2Int cell)
     {
         return bombs.ContainsKey(cell);
@@ -125,6 +130,13 @@ public class BlastResult
     public readonly List<Vector2Int> flameCells = new List<Vector2Int>();
     public readonly List<Vector2Int> blocksToDestroy = new List<Vector2Int>();
     public readonly List<Bomb> bombsToTrigger = new List<Bomb>();
+
+    public void Clear()
+    {
+        flameCells.Clear();
+        blocksToDestroy.Clear();
+        bombsToTrigger.Clear();
+    }
 }
 
 public static class BlastCalculator
@@ -137,6 +149,14 @@ public static class BlastCalculator
     public static BlastResult Calculate(Vector2Int origin, int range)
     {
         BlastResult result = new BlastResult();
+        Calculate(origin, range, result);
+        return result;
+    }
+
+    // Wersja bez alokacji: czyści i wypełnia podany wynik. Używa jej AI botów kilka razy na sekundę.
+    public static void Calculate(Vector2Int origin, int range, BlastResult result)
+    {
+        result.Clear();
         result.flameCells.Add(origin);
 
         foreach (Vector2Int direction in Directions)
@@ -166,7 +186,5 @@ public static class BlastCalculator
                 }
             }
         }
-
-        return result;
     }
 }

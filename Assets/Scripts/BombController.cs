@@ -8,13 +8,21 @@ public class BombController : MonoBehaviour
 {
     public Bomb bombPrefab;
 
+    [Tooltip("Nie pozwala postawić bomby na polu, które zachodzi ciałem inny gracz lub bot (np. stojący między dwoma polami).")]
+    public bool blockBombOnOtherPlayers = true;
+
     PlayerStats stats;
     PlayerPickups pickups;
+    PlayerMovement movement;
     int activeBombs;
+
+    // Czy gracz ma wolny slot na bombę (używają tego boty).
+    public bool HasFreeBomb => activeBombs < stats.maxBombs;
 
     void Awake()
     {
         stats = GetComponent<PlayerStats>();
+        movement = GetComponent<PlayerMovement>();
 
         if (bombPrefab == null)
         {
@@ -30,7 +38,10 @@ public class BombController : MonoBehaviour
 
     void Update()
     {
-        if (PlaceKeyPressed())
+        // boty nie używają klawiatury, dla nich bombę stawia BotBrain przez PlaceBomb()
+        bool keyboard = movement == null || movement.useKeyboard;
+
+        if (keyboard && PlaceKeyPressed())
         {
             OnActionPressed();
         }
@@ -45,6 +56,12 @@ public class BombController : MonoBehaviour
             return;
         }
 
+        PlaceBomb();
+    }
+
+    // Stawia bombę (z premią z buffa NextBomb). Używają jej Spacja i boty. Zwraca true, gdy bomba stanęła.
+    public bool PlaceBomb()
+    {
         int rangeBonus = 0;
         bool overLimit = false;
 
@@ -57,7 +74,7 @@ public class BombController : MonoBehaviour
 
         if (atLimit && !overLimit)
         {
-            return;
+            return false;
         }
 
         // bomba ponad limit nie zajmuje miejsca w limicie
@@ -65,7 +82,7 @@ public class BombController : MonoBehaviour
 
         if (!TryPlaceBomb(stats.blastRange + rangeBonus, countsTowardLimit))
         {
-            return;
+            return false;
         }
 
         // buff zużywa się tylko wtedy, gdy coś dał: dłuższy wybuch albo bombę ponad limit
@@ -73,6 +90,8 @@ public class BombController : MonoBehaviour
         {
             pickups.ConsumeNextBombBuff();
         }
+
+        return true;
     }
 
     bool PlaceKeyPressed()
@@ -88,7 +107,7 @@ public class BombController : MonoBehaviour
     {
         Vector2Int cell = GridMap.Instance.WorldToGrid(transform.position);
 
-        if (BombRegistry.HasBomb(cell))
+        if (BombRegistry.HasBomb(cell) || (blockBombOnOtherPlayers && OverlapsOtherPlayer(cell)))
         {
             return false;
         }
@@ -103,6 +122,37 @@ public class BombController : MonoBehaviour
         }
 
         return true;
+    }
+
+    // Ciało gracza ma rozmiar pola, więc zachodzi na pole, gdy środek jest bliżej niż pole minus drobny margines.
+    // Bez tej blokady bomby mogłyby stanąć po obu stronach gracza stojącego na granicy pól (BOMBA|BOT|BOMBA).
+    bool OverlapsOtherPlayer(Vector2Int cell)
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (match == null)
+        {
+            return false;
+        }
+
+        Vector3 center = GridMap.Instance.GridToWorld(cell);
+
+        foreach (Combatant other in match.Slots)
+        {
+            if (other == null || !other.IsAlive || other.health.transform == transform)
+            {
+                continue;
+            }
+
+            Vector3 offset = other.health.transform.position - center;
+
+            if (Mathf.Abs(offset.x) < 0.95f && Mathf.Abs(offset.y) < 0.95f)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void OnBombExploded(Bomb bomb)

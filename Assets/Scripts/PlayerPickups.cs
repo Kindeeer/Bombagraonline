@@ -216,7 +216,7 @@ public class PlayerPickups : MonoBehaviour
             return false;
         }
 
-        Rocket.Launch(cell, direction, HeldItem.rocketBlastRange, bombs.bombPrefab, HeldItem.Icon);
+        Rocket.Launch(cell, direction, HeldItem.rocketBlastRange, bombs.bombPrefab, HeldItem.Icon, transform);
         return true;
     }
 

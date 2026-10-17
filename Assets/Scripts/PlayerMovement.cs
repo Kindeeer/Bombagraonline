@@ -16,6 +16,14 @@ public class PlayerMovement : MonoBehaviour
     public Vector2Int startCell = new Vector2Int(1, 1);
     public float baseSpeed = 5f;
 
+    [Header("Sterowanie")]
+    [Tooltip("Zaznaczone: klawiatura. Odznaczone: kierunek podaje bot (aiInput).")]
+    public bool useKeyboard = true;
+    [HideInInspector] public Vector2Int aiInput;
+
+    [Tooltip("Gracze i boty nie mogą wchodzić jeden w drugiego (wyjść z nałożenia można).")]
+    public bool playersBlockEachOther = true;
+
     const float HalfSize = 0.5f;
 
     [Header("Skręcanie")]
@@ -222,8 +230,45 @@ public class PlayerMovement : MonoBehaviour
         return free > 0.00001f;
     }
 
+    // Inny żywy gracz lub bot blokuje wejście w jego ciało, ale kto już na nim stoi, może się odsunąć
+    // (tak samo jak przy bombie). Margines 0.98 sprawia, że postacie stojące obok siebie się nie zakleszczają.
+    bool BlockedByPlayer(Vector2 position, Vector2 current)
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (!playersBlockEachOther || match == null)
+        {
+            return false;
+        }
+
+        foreach (Combatant other in match.Slots)
+        {
+            if (other == null || !other.IsAlive || other.health.transform == transform)
+            {
+                continue;
+            }
+
+            Vector2 otherPosition = other.health.transform.position;
+
+            bool overlapsNow = Mathf.Abs(position.x - otherPosition.x) < 0.98f && Mathf.Abs(position.y - otherPosition.y) < 0.98f;
+            bool overlappedBefore = Mathf.Abs(current.x - otherPosition.x) < 0.98f && Mathf.Abs(current.y - otherPosition.y) < 0.98f;
+
+            if (overlapsNow && !overlappedBefore)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     bool Collides(Vector2 position, Vector2 current)
     {
+        if (BlockedByPlayer(position, current))
+        {
+            return true;
+        }
+
         GetCellRange(position, out int minX, out int maxX, out int minY, out int maxY);
 
         for (int x = minX; x <= maxX; x++)
@@ -272,8 +317,13 @@ public class PlayerMovement : MonoBehaviour
         return Facing.Down;
     }
 
-    static Vector2Int ReadInput()
+    Vector2Int ReadInput()
     {
+        if (!useKeyboard)
+        {
+            return aiInput;
+        }
+
 #if ENABLE_INPUT_SYSTEM
         Keyboard keyboard = Keyboard.current;
 

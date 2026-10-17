@@ -40,7 +40,12 @@ public class PlayerHealth : MonoBehaviour
         GetComponent<PlayerMovement>().enabled = false;
         GetComponent<BombController>().enabled = false;
         body.color = Color.red;
-        Invoke("Restart", restartDelay);
+
+        // gdy w scenie jest MatchManager, to on liczy punkty i restartuje rundę
+        if (MatchManager.Instance == null)
+        {
+            Invoke(nameof(Restart), restartDelay);
+        }
     }
 
     void Restart()

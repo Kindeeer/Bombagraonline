@@ -8,6 +8,7 @@ public class Rocket : MonoBehaviour
     const float Speed = 11f;
     const float FuseAfterLanding = 0.02f;
 
+    Transform shooter;
     Vector2Int start;
     Vector2Int direction;
     Vector2Int landing;
@@ -20,15 +21,16 @@ public class Rocket : MonoBehaviour
     float duration;
     float puffTimer;
 
-    public static void Launch(Vector2Int start, Vector2Int direction, int blastRange, Bomb bombPrefab, Sprite sprite)
+    public static void Launch(Vector2Int start, Vector2Int direction, int blastRange, Bomb bombPrefab, Sprite sprite, Transform shooter)
     {
         GameObject go = new GameObject("Rocket");
         Rocket rocket = go.AddComponent<Rocket>();
-        rocket.Begin(start, direction, blastRange, bombPrefab, sprite);
+        rocket.Begin(start, direction, blastRange, bombPrefab, sprite, shooter);
     }
 
-    void Begin(Vector2Int startCell, Vector2Int flyDirection, int range, Bomb prefab, Sprite sprite)
+    void Begin(Vector2Int startCell, Vector2Int flyDirection, int range, Bomb prefab, Sprite sprite, Transform shooterTransform)
     {
+        shooter = shooterTransform;
         start = startCell;
         direction = flyDirection;
         blastRange = range;
@@ -68,7 +70,14 @@ public class Rocket : MonoBehaviour
         time += Time.deltaTime;
         float u = Mathf.Clamp01(time / duration);
 
-        transform.position = Vector3.Lerp(from, to, u) + Vector3.up * 0.2f;
+        Vector3 path = Vector3.Lerp(from, to, u);
+        transform.position = path + Vector3.up * 0.2f;
+
+        if (TryHitPlayer(path))
+        {
+            Destroy(gameObject);
+            return;
+        }
 
         puffTimer -= Time.deltaTime;
 
@@ -85,6 +94,47 @@ public class Rocket : MonoBehaviour
         {
             Explode();
         }
+    }
+
+    // Rakieta trafia pierwszego napotkanego gracza lub bota (poza strzelającym) i wybucha na jego polu.
+    bool TryHitPlayer(Vector3 path)
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (match == null)
+        {
+            return false;
+        }
+
+        foreach (Combatant other in match.Slots)
+        {
+            if (other == null || !other.IsAlive || other.health.transform == shooter)
+            {
+                continue;
+            }
+
+            Vector3 position = other.health.transform.position;
+
+            if (Vector2.Distance(path, position) >= 0.55f)
+            {
+                continue;
+            }
+
+            landing = GridMap.Instance.WorldToGrid(position);
+
+            if (blastRange > 0)
+            {
+                BigExplosion();
+            }
+            else
+            {
+                SpawnFlame(landing);
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     void Explode()
