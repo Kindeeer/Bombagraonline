@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2b6c36e945d4d24a604e9a32ccea72e, type: 3}
+  m_Name: PickupTable
+  m_EditorClassIdentifier: 
+  blockDropChance: 0.3
+  fireImmuneSeconds: 0.7
+  items:
+  - {fileID: 11400000, guid: a541e7605dc04293bea49bfb33988385, type: 2}
+  - {fileID: 11400000, guid: 1163d5610b474632bef1cc9f4a2b51a4, type: 2}
+  - {fileID: 11400000, guid: f191f6fcd4544fde9b67ef342e0a1b28, type: 2}
+  - {fileID: 11400000, guid: 9b6430374e87491fb2c4268c7d45313c, type: 2}
+  - {fileID: 11400000, guid: 68fdcfb808b145e281b2c1d3f3a34801, type: 2}
+  - {fileID: 11400000, guid: b24a175cc4664b229739490936a1e481, type: 2}

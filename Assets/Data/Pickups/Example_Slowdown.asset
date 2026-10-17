@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 584aac5c9759415d93a08b29616ed3d6, type: 3}
+  m_Name: Example_Slowdown
+  m_EditorClassIdentifier: 
+  displayName: Slowdown
+  description: 'EXAMPLE of a bad pickup: weights are 0, so it never appears. Set a weight to turn it on.'
+  icon: {fileID: 21300000, guid: 08b78cd7fdaf39745b74cd5131e7a36c, type: 3}
+  placeholderIcon: 6
+  bubbleTint: {r: 1, g: 0.6, b: 0.6, a: 1}
+  mode: 2
+  extraBombs: 0
+  extraRange: 0
+  speedSteps: -2
+  durationSeconds: 5
+  special: 0
+  rocketBlastRange: 0
+  uses: 1
+  weightFromBlocks: 0
+  weightFromFountain: 0
