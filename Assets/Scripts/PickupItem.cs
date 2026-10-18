@@ -9,6 +9,9 @@ public class PickupItem : MonoBehaviour
     public Vector2Int Cell { get; private set; }
     public bool CanCollect => landed && !leaving;
 
+    // Bąbelek leżący na planszy rysuje się nad blokami, żeby wystający górny kawałek bloku z rzędu przed nim go nie zasłaniał.
+    const int LandedSortingOrder = 2;
+
     SortingGroup group;
     Transform visual;
     SpriteRenderer shadowRenderer;
@@ -64,7 +67,7 @@ public class PickupItem : MonoBehaviour
         Cell = cell;
 
         group = gameObject.AddComponent<SortingGroup>();
-        group.sortingOrder = 0;
+        group.sortingOrder = LandedSortingOrder;
 
         shadowRenderer = AddRenderer(transform, "Shadow", PickupArt.Shadow(), -1);
         shadowRenderer.transform.localPosition = new Vector3(0f, -0.3f, 0f);
@@ -142,7 +145,7 @@ public class PickupItem : MonoBehaviour
         landed = true;
         landedAt = age;
         transform.position = GridMap.Instance.GridToWorld(Cell);
-        group.sortingOrder = 0;
+        group.sortingOrder = LandedSortingOrder;
         shadowRenderer.enabled = true;
 
         if (withEffect)

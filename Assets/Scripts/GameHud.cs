@@ -1,9 +1,10 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 // Odświeża HUD zbudowany w Hierarchii (Canvas "HUD"). Układ, kolory i obrazki zmieniasz w edytorze,
-// a ten skrypt tylko wpisuje aktualne dane. Nowy HUD tworzy Tools > Bomb Game > Set Up Scene.
+// a ten skrypt tylko wpisuje aktualne dane. Grafiki HUD podmienia obiekt GameArt.
 public class GameHud : MonoBehaviour
 {
     [Serializable]
@@ -11,9 +12,14 @@ public class GameHud : MonoBehaviour
     {
         public Image background;
         public Image face;
-        public Text label;
-        [Tooltip("Korona lidera. Puste = GameHud dorobi ją sam na karcie.")]
+        public TMP_Text label;
+        [Tooltip("Korona lidera. Puste = GameHud dorobi ją sam przy buźce.")]
         public Image crown;
+
+        [Header("Emotka (dymek obok buźki)")]
+        public GameObject emoteBubble;
+        public Image emoteIcon;
+        public TMP_Text emoteText;
     }
 
     [Header("Układ")]
@@ -45,12 +51,12 @@ public class GameHud : MonoBehaviour
     public Image buffIcon;
     [Tooltip("Pokazywane, gdy slot jest pusty (np. znak zapytania).")]
     public GameObject buffEmpty;
-    public Text buffName;
-    public Text buffCount;
+    public TMP_Text buffName;
+    public TMP_Text buffCount;
 
     [Header("Przycisk akcji (Spacja)")]
     public Image actionIcon;
-    public Text actionBadge;
+    public TMP_Text actionBadge;
     public Sprite bombIcon;
 
     PlayerPickups localPickups;
@@ -60,6 +66,9 @@ public class GameHud : MonoBehaviour
     int[] shownScore;
     int shownLeader = -2;
 
+    // do kiedy (czas bez skali) każda emotka ma być widoczna
+    float[] emoteUntil;
+
     Rect lastSafeArea;
     Vector2Int lastScreenSize;
 
@@ -68,11 +77,68 @@ public class GameHud : MonoBehaviour
     int shownCount = -1;
     PickupDefinition shownAction;
 
+    void OnEnable()
+    {
+        Emotes.Sent += OnEmoteSent;
+    }
+
+    void OnDisable()
+    {
+        Emotes.Sent -= OnEmoteSent;
+    }
+
+    void OnEmoteSent(int slot, Emote emote)
+    {
+        ShowEmote(slot, Emotes.SpriteFor(emote));
+    }
+
+    // Wpisuje w HUD grafiki z GameArt: buźki, koronę, ikonę bomby, tło paneli, klawisze i joystick.
+    // Grafiki zastępcze są rozpoznawane po nazwie sprite'a (Panel, KeyCap), a joystick po nazwie obiektu.
+    void ApplyArt()
+    {
+        GameArt art = GameArt.Instance;
+
+        if (art == null)
+        {
+            return;
+        }
+
+        if (art.uiFace != null) faceAlive = art.uiFace;
+        if (art.uiFaceDead != null) faceDead = art.uiFaceDead;
+        if (art.uiCrown != null) crownSprite = art.uiCrown;
+        if (art.uiBombButton != null) bombIcon = art.uiBombButton;
+
+        foreach (Image image in GetComponentsInChildren<Image>(true))
+        {
+            Sprite current = image.sprite;
+
+            if (current != null && art.uiPanel != null && (current.name == "Panel" || current.name == "ui_panel"))
+            {
+                image.sprite = art.uiPanel;
+            }
+            else if (current != null && art.uiKeyCap != null && (current.name == "KeyCap" || current.name == "ui_key"))
+            {
+                image.sprite = art.uiKeyCap;
+            }
+            else if (image.gameObject.name == "JoystickRing" && art.joystickRing != null)
+            {
+                image.sprite = art.joystickRing;
+            }
+            else if (image.gameObject.name == "JoystickKnob" && art.joystickKnob != null)
+            {
+                image.sprite = art.joystickKnob;
+            }
+        }
+    }
+
     void Start()
     {
+        ApplyArt();
+
         shownState = new int[playerSlots.Length];
         shownScore = new int[playerSlots.Length];
         Array.Fill(shownState, -1);
+        emoteUntil = new float[playerSlots.Length];
         EnsureCrowns();
 
         UpdateSafeArea();
@@ -104,9 +170,65 @@ public class GameHud : MonoBehaviour
         UpdateCrown(match);
         UpdateBuff();
         UpdateAction();
+        UpdateEmotes();
     }
 
-    // Każda karta gracza dostaje koronę (wyłączoną), jeśli designer nie dodał własnej.
+    // Pokazuje dymek emotki obok buźki gracza o danym slocie (0 = lokalny gracz) na kilka sekund.
+    // Ikona i tekst są opcjonalne. Wołaj to, gdy gracz wyśle emotkę (później także z sieci).
+    public void ShowEmote(int slot, Sprite icon, string text = null, float seconds = 2.5f)
+    {
+        if (slot < 0 || slot >= playerSlots.Length || playerSlots[slot] == null || playerSlots[slot].emoteBubble == null)
+        {
+            return;
+        }
+
+        if (emoteUntil == null)
+        {
+            emoteUntil = new float[playerSlots.Length];
+        }
+
+        PlayerSlot target = playerSlots[slot];
+
+        if (target.emoteIcon != null)
+        {
+            target.emoteIcon.sprite = icon;
+            target.emoteIcon.enabled = icon != null;
+        }
+
+        if (target.emoteText != null)
+        {
+            target.emoteText.text = text ?? "";
+        }
+
+        target.emoteBubble.SetActive(true);
+        emoteUntil[slot] = Time.unscaledTime + seconds;
+    }
+
+    [ContextMenu("Test emotki (gracz 1)")]
+    void TestEmote()
+    {
+        ShowEmote(0, null, "GG!");
+    }
+
+    void UpdateEmotes()
+    {
+        if (emoteUntil == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < playerSlots.Length; i++)
+        {
+            PlayerSlot slot = playerSlots[i];
+
+            if (slot != null && slot.emoteBubble != null && slot.emoteBubble.activeSelf && Time.unscaledTime >= emoteUntil[i])
+            {
+                slot.emoteBubble.SetActive(false);
+            }
+        }
+    }
+
+    // Każdy gracz dostaje koronę (wyłączoną) przy buźce, jeśli designer nie dodał własnej.
     void EnsureCrowns()
     {
         foreach (PlayerSlot slot in playerSlots)
@@ -118,10 +240,10 @@ public class GameHud : MonoBehaviour
 
             GameObject crownObject = new GameObject("Crown", typeof(RectTransform), typeof(Image));
             RectTransform rect = crownObject.GetComponent<RectTransform>();
-            rect.SetParent(slot.face.transform.parent, false);
+            rect.SetParent(slot.face.rectTransform, false);
             // korona siedzi na czubku główki: wyśrodkowana nad buźką, dolna krawędź lekko zachodzi na głowę
-            rect.anchorMin = new Vector2(0.3f, 0.56f);
-            rect.anchorMax = new Vector2(0.7f, 0.84f);
+            rect.anchorMin = new Vector2(0.22f, 0.68f);
+            rect.anchorMax = new Vector2(0.78f, 1.14f);
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
@@ -226,19 +348,29 @@ public class GameHud : MonoBehaviour
             Color color = match != null && i < match.slotColors.Length ? match.slotColors[i]
                 : i < playerColors.Length ? playerColors[i] : Color.white;
 
+            // własna buźka gracza z GameArt nie jest barwiona kolorem slotu, bez niej jest biała buźka w kolorze slotu
+            GameArt art = GameArt.Instance;
+            PlayerSprites sprites = art != null ? art.PlayerFor(i) : null;
+            Sprite portrait = sprites != null ? sprites.Portrait : null;
+            Sprite portraitDead = sprites != null ? sprites.PortraitDead : null;
+            Sprite alive = portrait != null ? portrait : faceAlive;
+            Sprite dead = portraitDead != null ? portraitDead : (portrait != null ? portrait : faceDead);
+            Color aliveColor = portrait != null ? Color.white : color;
+            Color deadFaceColor = portraitDead != null || portrait != null ? Color.white : color;
+
             if (state == 0)
             {
                 // pusty slot: nikt nie gra tym kolorem
-                color.a = emptySlotAlpha;
-                SetSlot(slot, faceAlive, color, new Color(cardColor.r, cardColor.g, cardColor.b, 0.5f), "", textColor);
+                aliveColor.a = emptySlotAlpha;
+                SetSlot(slot, alive, aliveColor, new Color(cardColor.r, cardColor.g, cardColor.b, 0.5f), "", textColor);
             }
             else if (state == 2)
             {
-                SetSlot(slot, faceDead, color, cardColor, "DEAD  " + score, deadColor);
+                SetSlot(slot, dead, deadFaceColor, cardColor, "DEAD  " + score, deadColor);
             }
             else
             {
-                SetSlot(slot, faceAlive, color, cardColor, MatchManager.NameOf(combatant) + "  " + score, textColor);
+                SetSlot(slot, alive, aliveColor, cardColor, MatchManager.NameOf(combatant) + "  " + score, textColor);
             }
         }
     }

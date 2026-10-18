@@ -43,9 +43,31 @@ public class PlayerVisual : MonoBehaviour
         basePosition = bodyTransform.localPosition;
     }
 
+    // Ustawia grafiki postaci z GameArt (puste pola zostawiają dotychczasowe). Wołane przez MatchManager.
+    public void SetSprites(PlayerSprites sprites)
+    {
+        if (sprites == null || !sprites.HasSprites)
+        {
+            return;
+        }
+
+        if (sprites.Front != null) front = sprites.Front;
+        if (sprites.Back != null) back = sprites.Back;
+        if (sprites.Left != null) left = sprites.Left;
+        if (sprites.Right != null) right = sprites.Right;
+
+        if (body != null)
+        {
+            body.color = sprites.tint;
+        }
+    }
+
     void Update()
     {
         body.sprite = SpriteFor(movement.Facing);
+
+        // brak osobnej grafiki lewej strony: odbijamy prawą
+        body.flipX = movement.Facing == Facing.Left && left == null;
 
         Vector3 targetPosition = basePosition;
         Vector3 targetScale = Vector3.one;
@@ -81,7 +103,7 @@ public class PlayerVisual : MonoBehaviour
         switch (facing)
         {
             case Facing.Up: return back;
-            case Facing.Left: return left;
+            case Facing.Left: return left != null ? left : right;
             case Facing.Right: return right;
         }
 

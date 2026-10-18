@@ -38,7 +38,7 @@ public class Rocket : MonoBehaviour
 
         Vector2Int cell = start;
 
-        for (int i = 0; i < GridMap.Size; i++)
+        for (int i = 0; i < Mathf.Max(GridMap.Width, GridMap.Height); i++)
         {
             Vector2Int next = cell + direction;
 
@@ -182,7 +182,7 @@ public class Rocket : MonoBehaviour
         else if (TileRules.IsDestructible(map.GetTileType(obstacle)))
         {
             SpawnFlame(obstacle);
-            map.DestroyBlock(obstacle);
+            map.DestroyBlock(obstacle, this);
         }
     }
 

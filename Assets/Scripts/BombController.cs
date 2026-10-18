@@ -11,6 +11,10 @@ public class BombController : MonoBehaviour
     [Tooltip("Nie pozwala postawić bomby na polu, które zachodzi ciałem inny gracz lub bot (np. stojący między dwoma polami).")]
     public bool blockBombOnOtherPlayers = true;
 
+    // co ile sekund klątwa "biegunka bomb" zostawia bombę
+    const float AutoBombInterval = 0.9f;
+    float autoBombTimer;
+
     PlayerStats stats;
     PlayerPickups pickups;
     PlayerMovement movement;
@@ -38,16 +42,34 @@ public class BombController : MonoBehaviour
 
     void Update()
     {
+        // do napisu GO! nie można stawiać bomb
+        if (MatchManager.InputLocked)
+        {
+            return;
+        }
+
+        // klątwa "biegunka bomb": postać sama zostawia bombę co chwilę
+        if (pickups != null && pickups.AutoBombs)
+        {
+            autoBombTimer -= Time.deltaTime;
+
+            if (autoBombTimer <= 0f)
+            {
+                autoBombTimer = AutoBombInterval;
+                PlaceBomb();
+            }
+        }
+
         // boty nie używają klawiatury, dla nich bombę stawia BotBrain przez PlaceBomb()
         bool keyboard = movement == null || movement.useKeyboard;
 
-        if (keyboard && PlaceKeyPressed())
+        if (keyboard && (PlaceKeyPressed() || TouchInput.ConsumeBomb()))
         {
             OnActionPressed();
         }
     }
 
-    // Spacja: przedmiot specjalny ze slotu Buff, a jeśli go nie ma, bomba (z premią z buffa NextBomb).
+    // Spacja albo przycisk na ekranie: przedmiot specjalny ze slotu Buff, a jeśli go nie ma, bomba (z premią z buffa NextBomb).
     void OnActionPressed()
     {
         if (pickups != null && pickups.HasSpecial)

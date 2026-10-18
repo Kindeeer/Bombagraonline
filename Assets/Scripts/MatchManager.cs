@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -32,6 +33,14 @@ public class MatchManager : MonoBehaviour
     [Tooltip("Tyle sekund widać wynik rundy, zanim zacznie się następna.")]
     public float restartDelay = 3f;
 
+    [Header("Start rundy")]
+    [Tooltip("Na starcie widać całą arenę z napisem READY, a po GO! kamera przybliża się i gra rusza.")]
+    public bool playIntro = true;
+    public float readySeconds = 1.3f;
+    public float goSeconds = 0.8f;
+    public Color readyColor = new Color(1f, 0.93f, 0.4f);
+    public Color goColor = new Color(0.45f, 1f, 0.5f);
+
     [Header("Kolory slotów (karta w HUD i odcień botów)")]
     public Color[] slotColors =
     {
@@ -48,6 +57,9 @@ public class MatchManager : MonoBehaviour
     public Combatant[] Slots { get; } = new Combatant[MaxSlots];
     public bool RoundOver { get; private set; }
 
+    // true od startu rundy do napisu GO!: gracz i boty stoją w miejscu i nie stawiają bomb
+    public static bool InputLocked { get; private set; }
+
     string banner = "";
     GUIStyle bannerStyle;
 
@@ -55,6 +67,7 @@ public class MatchManager : MonoBehaviour
     static void ResetStatics()
     {
         Array.Clear(scores, 0, scores.Length);
+        InputLocked = false;
     }
 
     public static int GetScore(int slot)
@@ -67,6 +80,43 @@ public class MatchManager : MonoBehaviour
         return combatant.isBot ? "BOT " + combatant.slot : "YOU";
     }
 
+    // Grafiki gracza ze slotu z obiektu GameArt (null, gdy w scenie nie ma GameArt).
+    static PlayerSprites SpritesFor(int slot)
+    {
+        GameArt art = GameArt.Instance;
+        return art != null ? art.PlayerFor(slot) : null;
+    }
+
+    // Wpisuje w postać grafiki z GameArt: cztery kierunki i cień. Puste pola zostawiają dotychczasowy wygląd.
+    void ApplyArt(GameObject character, int slot)
+    {
+        GameArt art = GameArt.Instance;
+
+        if (art == null)
+        {
+            return;
+        }
+
+        PlayerVisual visual = character.GetComponentInChildren<PlayerVisual>();
+        PlayerSprites sprites = art.PlayerFor(slot);
+
+        if (visual != null && sprites != null)
+        {
+            visual.SetSprites(sprites);
+        }
+
+        if (art.playerShadow != null)
+        {
+            foreach (SpriteRenderer renderer in character.GetComponentsInChildren<SpriteRenderer>(true))
+            {
+                if (renderer.name == "Shadow")
+                {
+                    renderer.sprite = art.playerShadow;
+                }
+            }
+        }
+    }
+
     void OnEnable()
     {
         Instance = this;
@@ -77,6 +127,7 @@ public class MatchManager : MonoBehaviour
         if (Instance == this)
         {
             Instance = null;
+            InputLocked = false;
         }
     }
 
@@ -92,11 +143,46 @@ public class MatchManager : MonoBehaviour
         }
 
         Register(human, 0, false);
+        ApplyArt(human.gameObject, 0);
 
         for (int slot = 1; slot <= botCount && slot < MaxSlots; slot++)
         {
             SpawnBot(human, slot);
         }
+
+        if (playIntro)
+        {
+            StartCoroutine(IntroRoutine());
+        }
+    }
+
+    // READY na widoku całej areny, potem GO!: kamera się przybliża, a gracze i boty mogą ruszyć.
+    IEnumerator IntroRoutine()
+    {
+        InputLocked = true;
+
+        ArenaCamera arenaCamera = FindAnyObjectByType<ArenaCamera>();
+
+        if (arenaCamera != null)
+        {
+            arenaCamera.SetMode(ArenaCamera.ViewMode.Whole, true);
+        }
+
+        RoundIntro intro = RoundIntro.Create();
+
+        // jedna klatka na ustawienie kamery i postaci
+        yield return null;
+        yield return intro.Show("READY", readyColor, readySeconds);
+
+        InputLocked = false;
+
+        if (arenaCamera != null)
+        {
+            arenaCamera.SetMode(ArenaCamera.ViewMode.Medium);
+        }
+
+        yield return intro.Show("GO!", goColor, goSeconds);
+        Destroy(intro.gameObject);
     }
 
     void Register(PlayerHealth health, int slot, bool isBot)
@@ -121,13 +207,20 @@ public class MatchManager : MonoBehaviour
         movement.startCell = map.spawnPositions[slot % map.spawnPositions.Length];
         movement.baseSpeed *= botSpeedMultiplier;
 
-        Color tint = Color.Lerp(Color.white, slotColors[slot], botTintStrength);
+        // bot z własnymi grafikami (GameArt) wygląda jak jego zwierzak, bez nich dostaje odcień slotu
+        ApplyArt(copy, slot);
+        PlayerSprites botSprites = SpritesFor(slot);
 
-        foreach (SpriteRenderer sprite in copy.GetComponentsInChildren<SpriteRenderer>())
+        if (botSprites == null || !botSprites.HasSprites)
         {
-            if (sprite.name != "Shadow")
+            Color tint = Color.Lerp(Color.white, slotColors[slot], botTintStrength);
+
+            foreach (SpriteRenderer sprite in copy.GetComponentsInChildren<SpriteRenderer>())
             {
-                sprite.color = tint;
+                if (sprite.name != "Shadow")
+                {
+                    sprite.color = tint;
+                }
             }
         }
 

@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 #endif
 
 // Fontanna z czekolady na środku planszy (domyślnie 3x3 pola). Co jakiś czas tryska jak hydrant i wyrzuca bąbelki z przedmiotami.
-// Obiekt fontanny dodaje do sceny Tools > Bomb Game > Set Up Scene. Pozycję ustawia sam według GridMap.
+// Obiekt fontanny jest w scenie. Pozycję ustawia sam według GridMap, a grafiki bierze z obiektu GameArt.
 [RequireComponent(typeof(PickupSpawner))]
 public class ChocolateFountain : MonoBehaviour
 {
@@ -104,7 +104,7 @@ public class ChocolateFountain : MonoBehaviour
 
         if (useMapCenter)
         {
-            cell = new Vector2Int(GridMap.Size / 2, GridMap.Size / 2);
+            cell = new Vector2Int(GridMap.Width / 2, GridMap.Height / 2);
         }
 
         int low = -(size / 2);

@@ -4,7 +4,7 @@ using UnityEngine;
 // Pola zagrożone wybuchem: suma zasięgów wszystkich bomb na planszy. Liczona raz na klatkę dla wszystkich botów.
 public static class DangerMap
 {
-    static readonly bool[] danger = new bool[GridMap.Size * GridMap.Size];
+    static readonly bool[] danger = new bool[GridMap.Width * GridMap.Height];
     static readonly BlastResult scratch = new BlastResult();
     static int builtFrame = -1;
 
@@ -25,12 +25,12 @@ public static class DangerMap
     {
         Build();
 
-        if (cell.x < 0 || cell.y < 0 || cell.x >= GridMap.Size || cell.y >= GridMap.Size)
+        if (cell.x < 0 || cell.y < 0 || cell.x >= GridMap.Width || cell.y >= GridMap.Height)
         {
             return true;
         }
 
-        return danger[cell.y * GridMap.Size + cell.x] || GridMap.Instance.IsOnFire(cell);
+        return danger[cell.y * GridMap.Width + cell.x] || GridMap.Instance.IsOnFire(cell);
     }
 
     static void Build()
@@ -50,7 +50,7 @@ public static class DangerMap
 
             foreach (Vector2Int cell in scratch.flameCells)
             {
-                danger[cell.y * GridMap.Size + cell.x] = true;
+                danger[cell.y * GridMap.Width + cell.x] = true;
             }
         }
     }
@@ -62,8 +62,10 @@ public static class DangerMap
 [RequireComponent(typeof(PlayerMovement), typeof(BombController))]
 public class BotBrain : MonoBehaviour
 {
-    const int Size = GridMap.Size;
-    const int CellCount = Size * Size;
+    const int Width = GridMap.Width;
+    const int Height = GridMap.Height;
+    const int CellCount = Width * Height;
+    const int LongestSide = Width > Height ? Width : Height;
 
     static readonly Vector2Int[] Directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
 
@@ -122,6 +124,13 @@ public class BotBrain : MonoBehaviour
 
     void Update()
     {
+        // na starcie rundy (do napisu GO!) boty stoją w miejscu
+        if (MatchManager.InputLocked || DebugMenu.FreezeBots)
+        {
+            movement.aiInput = Vector2Int.zero;
+            return;
+        }
+
         MatchManager match = MatchManager.Instance;
 
         if (health.IsDead || match == null || match.RoundOver)
@@ -304,7 +313,7 @@ public class BotBrain : MonoBehaviour
             {
                 Vector2Int next = currentCell + direction;
 
-                if (next.x < 0 || next.y < 0 || next.x >= Size || next.y >= Size)
+                if (next.x < 0 || next.y < 0 || next.x >= Width || next.y >= Height)
                 {
                     continue;
                 }
@@ -377,6 +386,18 @@ public class BotBrain : MonoBehaviour
             return false;
         }
 
+        // zamiana miejsc: bot używa jej od czasu do czasu albo gdy stoi w niebezpiecznym miejscu
+        if (pickups.HeldItem.special == SpecialItem.Teleport)
+        {
+            if (DangerMap.IsDangerous(cell) || UnityEngine.Random.value < 0.06f)
+            {
+                specialCooldownUntil = Time.time + 1f;
+                return pickups.UseSpecial();
+            }
+
+            return false;
+        }
+
         Vector2Int direction = pickups.HeldItem.special == SpecialItem.Rocket ? RocketTarget(cell) : HammerTarget(cell);
 
         if (direction == Vector2Int.zero)
@@ -402,7 +423,7 @@ public class BotBrain : MonoBehaviour
 
         foreach (Vector2Int direction in Directions)
         {
-            for (int step = 1; step < Size; step++)
+            for (int step = 1; step < LongestSide; step++)
             {
                 Vector2Int next = cell + direction * step;
 
@@ -548,7 +569,7 @@ public class BotBrain : MonoBehaviour
             {
                 Vector2Int next = currentCell + direction;
 
-                if (next.x < 0 || next.y < 0 || next.x >= Size || next.y >= Size)
+                if (next.x < 0 || next.y < 0 || next.x >= Width || next.y >= Height)
                 {
                     continue;
                 }
@@ -653,7 +674,7 @@ public class BotBrain : MonoBehaviour
         movement.aiInput = wanderDirection;
     }
 
-    static int Index(Vector2Int cell) => cell.y * Size + cell.x;
+    static int Index(Vector2Int cell) => cell.y * Width + cell.x;
 
-    static Vector2Int FromIndex(int index) => new Vector2Int(index % Size, index / Size);
+    static Vector2Int FromIndex(int index) => new Vector2Int(index % Width, index / Width);
 }

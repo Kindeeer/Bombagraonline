@@ -7,6 +7,10 @@ public class Bomb : MonoBehaviour
     public Flame flamePrefab;
     public float chainDelay = 0.08f;
     public float sortOffsetY = 0.02f;
+    [Tooltip("O ile podnosimy kolejność rysowania bomby, żeby sortowała się z blokami i postaciami według osi Y, a nie leżała pod blokami.")]
+    public int sortingBoost = 1;
+
+    bool sortingApplied;
 
     public event Action<Bomb> Exploded;
     public Vector2Int Cell { get; private set; }
@@ -19,6 +23,27 @@ public class Bomb : MonoBehaviour
 
     public void Init(Vector2Int cell, float fuseTime, int blastRange)
     {
+        if (!sortingApplied)
+        {
+            foreach (SpriteRenderer spriteRenderer in GetComponentsInChildren<SpriteRenderer>(true))
+            {
+                spriteRenderer.sortingOrder += sortingBoost;
+            }
+
+            sortingApplied = true;
+
+            // grafika bomby z GameArt (puste = grafika z prefabu)
+            GameArt art = GameArt.Instance;
+            SpriteRenderer mainRenderer = GetComponent<SpriteRenderer>();
+
+            Sprite bombSprite = art != null ? art.BombSprite : null;
+
+            if (bombSprite != null && mainRenderer != null)
+            {
+                mainRenderer.sprite = bombSprite;
+            }
+        }
+
         Cell = cell;
         timeLeft = fuseTime;
         range = blastRange;
@@ -40,6 +65,116 @@ public class Bomb : MonoBehaviour
         if (timeLeft <= 0f)
         {
             Explode();
+            return;
+        }
+
+        UpdateSlide();
+    }
+
+    // ---------- Odkopywanie (przedmiot "Kopanie bomb") ----------
+
+    [Tooltip("Prędkość odkopniętej bomby w polach na sekundę.")]
+    public float kickSpeed = 7f;
+
+    Vector2Int slideDirection;
+    bool sliding;
+    Vector3 slideFrom;
+    Vector3 slideTo;
+    float slideProgress;
+
+    // Odkopuje bombę w podanym kierunku. Jedzie pole po polu, aż napotka przeszkodę, postać albo ogień.
+    public void Kick(Vector2Int direction)
+    {
+        if (hasExploded || direction == Vector2Int.zero)
+        {
+            return;
+        }
+
+        slideDirection = direction;
+
+        if (!sliding)
+        {
+            TryStartSlideStep();
+        }
+    }
+
+    void TryStartSlideStep()
+    {
+        Vector2Int next = Cell + slideDirection;
+
+        if (!CanSlideInto(next))
+        {
+            slideDirection = Vector2Int.zero;
+            sliding = false;
+            return;
+        }
+
+        // pole logicznie zmienia się od razu, a grafika dojeżdża do niego płynnie
+        GridMap.Instance.SetBomb(Cell, false);
+        BombRegistry.Unregister(this);
+        Cell = next;
+        GridMap.Instance.SetBomb(Cell, true);
+        BombRegistry.Register(this);
+
+        slideFrom = transform.position;
+        slideTo = GridMap.Instance.GridToWorld(Cell) + Vector3.up * sortOffsetY;
+        slideProgress = 0f;
+        sliding = true;
+    }
+
+    // Wolne pole bez bomby, ściany, bloku i ognia, na którym nie stoi żadna żywa postać.
+    bool CanSlideInto(Vector2Int cell)
+    {
+        GridMap map = GridMap.Instance;
+
+        if (!map.CanEnter(cell) || map.IsOnFire(cell))
+        {
+            return false;
+        }
+
+        MatchManager match = MatchManager.Instance;
+
+        if (match != null)
+        {
+            Vector3 center = map.GridToWorld(cell);
+
+            foreach (Combatant combatant in match.Slots)
+            {
+                if (combatant == null || !combatant.IsAlive)
+                {
+                    continue;
+                }
+
+                Vector3 offset = combatant.health.transform.position - center;
+
+                if (Mathf.Abs(offset.x) < 0.9f && Mathf.Abs(offset.y) < 0.9f)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    void UpdateSlide()
+    {
+        if (!sliding)
+        {
+            return;
+        }
+
+        slideProgress += kickSpeed * Time.deltaTime;
+        transform.position = Vector3.Lerp(slideFrom, slideTo, Mathf.Clamp01(slideProgress));
+
+        if (slideProgress >= 1f)
+        {
+            sliding = false;
+
+            if (slideDirection != Vector2Int.zero)
+            {
+                TryStartSlideStep();
+            }
         }
     }
 
@@ -75,7 +210,7 @@ public class Bomb : MonoBehaviour
 
         foreach (Vector2Int cell in blast.blocksToDestroy)
         {
-            GridMap.Instance.DestroyBlock(cell);
+            GridMap.Instance.DestroyBlock(cell, this);
         }
 
         foreach (Bomb other in blast.bombsToTrigger)

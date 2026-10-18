@@ -10,6 +10,9 @@ public class PlayerStats : MonoBehaviour
     [Header("Limity (dla power-upów)")]
     public int maxBombsLimit = 6;
     public int blastRangeLimit = 8;
+    [Tooltip("Najkrótszy i najdłuższy lont bomby (sekundy) po przedmiotach zmieniających lont.")]
+    public float minFuseTime = 1f;
+    public float maxFuseTime = 5f;
 
     [Header("Szybkość (power-up)")]
     public float speedStep = 0.4f;
@@ -45,6 +48,19 @@ public class PlayerStats : MonoBehaviour
         movement.baseSpeed += applied * speedStep;
         speedUpgrades = target;
         return applied;
+    }
+
+    // Zmienia lont bomby w sekundach w granicach limitów. Zwraca faktyczną zmianę, żeby efekt czasowy dało się cofnąć.
+    public float AddFuse(float delta)
+    {
+        if (Mathf.Approximately(delta, 0f))
+        {
+            return 0f;
+        }
+
+        float before = fuseTime;
+        fuseTime = Mathf.Clamp(fuseTime + delta, minFuseTime, maxFuseTime);
+        return fuseTime - before;
     }
 
     public int AddBomb(int amount = 1)

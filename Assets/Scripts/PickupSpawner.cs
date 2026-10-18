@@ -97,9 +97,9 @@ public class PickupSpawner : MonoBehaviour
 
         if (map != null)
         {
-            for (int x = 1; x < GridMap.Size - 1; x++)
+            for (int x = 1; x < GridMap.Width - 1; x++)
             {
-                for (int y = 1; y < GridMap.Size - 1; y++)
+                for (int y = 1; y < GridMap.Height - 1; y++)
                 {
                     Vector2Int cell = new Vector2Int(x, y);
 

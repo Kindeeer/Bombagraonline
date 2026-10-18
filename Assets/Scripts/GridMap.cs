@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -46,8 +47,11 @@ public class GridMap : MonoBehaviour
 {
     public static GridMap Instance;
 
-    public const int Size = 15;
-    const int CellCount = Size * Size;
+    // Rozmiar siatki z ramką: plansza jest szeroka, bo poziomy telefon ma szeroki ekran, a pole zależy od liczby wierszy.
+    // Po zmianie wygeneruj arenę od nowa: przycisk "Maluj arenę" w obiekcie GameArt.
+    public const int Width = 17;
+    public const int Height = 15;
+    const int CellCount = Width * Height;
 
     [Header("Domyślny Sprite (Używany dla Bomb i Płomieni)")]
     public Sprite squareSprite;
@@ -71,9 +75,25 @@ public class GridMap : MonoBehaviour
     [Header("Kafelek bezpiecznej strefy (Brak spawnu bloków)")]
     public TileBase noSpawnTile;
 
+    [Header("Układy planszy (losowane co rundę)")]
+    [Tooltip("Prefaby układów z Assets/Layouts (wpisuje je przycisk w obiekcie GameArt). Puste = używana jest tilemapa namalowana w scenie.")]
+    public GameObject[] layouts;
+    [Tooltip("Losowo odbija wylosowany układ w poziomie i w pionie, więc z jednego układu powstają cztery plansze.")]
+    public bool randomFlip = true;
+    [Tooltip("-1 = losowy układ co rundę. 0, 1, 2... = zawsze ten sam układ (bez odbicia), do oglądania. Numer liczysz od 0 wśród układów pasujących do rozmiaru planszy, w kolejności listy.")]
+    public int forcedLayoutIndex = -1;
+
     [Header("Generowanie bloków niszczalnych w korytarzach")]
     public bool fillEmptyPathsWithBlocks = true;
     [Range(0.00f, 1.00f)] public float blockSpawnChance = 0.70f;
+
+    [Header("Otwartość planszy (więcej walki)")]
+    [Tooltip("Mnożnik szansy na blok: 1 = jak w polu wyżej, mniej = bardziej otwarta plansza.")]
+    [Range(0.2f, 1f)] public float densityScale = 0.75f;
+    [Tooltip("Wokół fontanny nie pojawiają się losowe bloki, więc da się ją obejść.")]
+    public bool keepFountainRingFree = true;
+    [Tooltip("Środkowy rząd i środkowa kolumna nie dostają losowych bloków: gracze szybciej się spotykają.")]
+    public bool openCenterLanes = true;
 
     [Header("Szanse na rodzaje bloków niszczalnych (%)")]
     [Range(0, 100)] public int cookieChance = 65;
@@ -85,25 +105,20 @@ public class GridMap : MonoBehaviour
     public float honeyPuddleDuration = 2.0f;
     public float sodaPuddleDuration = 2.0f;
 
-    [Header("Ochrona bloku po trafieniu (Sekundy)")]
-    public float blockHitCooldown = 0.5f;
-
     [Header("Start graczy (Rogi planszy)")]
-    public Vector2Int[] spawnPositions =
-    {
-        new Vector2Int(1, 1),
-        new Vector2Int(1, Size - 2),
-        new Vector2Int(Size - 2, 1),
-        new Vector2Int(Size - 2, Size - 2)
-    };
+    public Vector2Int[] spawnPositions = DefaultSpawnPositions();
 
-    // Tablice jednowymiarowe (szybsze niż [,]). Pole (x, y) leży pod indeksem y * Size + x.
+    // Tablice jednowymiarowe (szybsze niż [,]). Pole (x, y) leży pod indeksem y * Width + x.
     readonly TileType[] grid = new TileType[CellCount];
     readonly bool[] reservedCells = new bool[CellCount];
     readonly bool[] bombs = new bool[CellCount];
     readonly int[] fire = new int[CellCount];
     readonly int[] puddleToken = new int[CellCount];
-    readonly float[] blockImmuneUntil = new float[CellCount];
+    readonly object[] blockLastHitBy = new object[CellCount];
+
+    // warianty grafik z GameArt: kafelki na wariant dla każdego rodzaju i numer wariantu wylosowany dla każdego pola
+    readonly Dictionary<TileType, TileBase[]> variantTiles = new Dictionary<TileType, TileBase[]>();
+    readonly int[] variantSeed = new int[CellCount];
     int nextPuddleToken;
 
     // false po przeładowaniu skryptów w trakcie gry (Unity czyści wtedy zwykłe pola i statyczne)
@@ -113,13 +128,39 @@ public class GridMap : MonoBehaviour
 
     static readonly Vector2Int[] Directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
 
-    static int Index(int x, int y) => y * Size + x;
-    static int Index(Vector2Int cell) => cell.y * Size + cell.x;
+    static int Index(int x, int y) => y * Width + x;
+    static int Index(Vector2Int cell) => cell.y * Width + cell.x;
 
     void Awake()
     {
         Instance = this;
+        EnsureSpawnPositionsInBounds();
         BuildMapFromTilemap();
+    }
+
+    // Pozycje startowe zapisane w scenie mogą pochodzić ze starego rozmiaru siatki. Poza planszą stawiamy rogi od nowa.
+    public void EnsureSpawnPositionsInBounds()
+    {
+        foreach (Vector2Int spawn in spawnPositions)
+        {
+            if (!InBounds(spawn))
+            {
+                spawnPositions = DefaultSpawnPositions();
+                Debug.LogWarning("GridMap: pozycje startowe były poza planszą, ustawiłem rogi.", this);
+                return;
+            }
+        }
+    }
+
+    public static Vector2Int[] DefaultSpawnPositions()
+    {
+        return new[]
+        {
+            new Vector2Int(1, 1),
+            new Vector2Int(1, Height - 2),
+            new Vector2Int(Width - 2, 1),
+            new Vector2Int(Width - 2, Height - 2)
+        };
     }
 
     // Po rekompilacji w trakcie gry Awake nie wraca, ale OnEnable tak: podpinamy się jeszcze raz
@@ -153,6 +194,20 @@ public class GridMap : MonoBehaviour
             return;
         }
 
+        // 0. Jeśli są układy, losujemy jeden i malujemy go w tilemapie (z losowym odbiciem)
+        if (layouts != null && layouts.Length > 0)
+        {
+            ApplyRandomLayout();
+        }
+
+        // warianty grafik z GameArt: dla każdego pola losujemy numer wariantu raz na rundę
+        BuildVariantTiles();
+
+        for (int i = 0; i < variantSeed.Length; i++)
+        {
+            variantSeed[i] = Random.Range(0, 100000);
+        }
+
         // 1. Odczytaj kafelki z namalowanej Tilemapy
         ReadTilemap();
         mapReady = true;
@@ -162,13 +217,247 @@ public class GridMap : MonoBehaviour
         {
             GenerateDestructibleBlocks();
         }
+
+        // 3. Ramka i ściany z układu też dostają losowe warianty, a podłoga układa się z wariantów
+        ApplyVariantsToBlocks();
+        ApplyFloorVariants();
+    }
+
+    // Dla każdego rodzaju kafelka, który ma w GameArt co najmniej dwa warianty, tworzymy po kafelku na wariant.
+    // Przy jednym wariancie zostaje zwykły plik z Assets/Tiles (GameArt wpisuje w niego sprite).
+    void BuildVariantTiles()
+    {
+        variantTiles.Clear();
+        GameArt art = GameArt.Instance;
+
+        if (art == null)
+        {
+            return;
+        }
+
+        AddVariants(art, TileType.SolidWall, borderTile);
+        AddVariants(art, TileType.Pillar, pillarTile);
+        AddVariants(art, TileType.Cookie, cookieTile);
+        AddVariants(art, TileType.HeavyCookie, heavyCookieTile);
+        AddVariants(art, TileType.HoneyBlock, honeyBlockTile);
+        AddVariants(art, TileType.SodaBlock, sodaBlockTile);
+        AddVariants(art, TileType.HoneyPuddle, honeyPuddleTile);
+        AddVariants(art, TileType.SodaPuddle, sodaPuddleTile);
+    }
+
+    void AddVariants(GameArt art, TileType type, TileBase template)
+    {
+        Sprite[] sprites = art.TileVariants(type);
+
+        // przy wybranym motywie nawet pojedyncza grafika wymaga własnego kafelka (plik w Assets/Tiles trzyma tylko jedną)
+        int minimum = art.HasTheme ? 1 : 2;
+
+        if (sprites == null || sprites.Length < minimum)
+        {
+            return;
+        }
+
+        List<TileBase> list = new List<TileBase>();
+
+        foreach (Sprite sprite in sprites)
+        {
+            if (sprite != null)
+            {
+                list.Add(CreateVariantTile(sprite, template as Tile));
+            }
+        }
+
+        if (list.Count >= minimum)
+        {
+            variantTiles[type] = list.ToArray();
+        }
+    }
+
+    // Nowy kafelek z podanym sprite'em i ustawieniami (kolor, kolizja) wzorcowego kafelka.
+    static Tile CreateVariantTile(Sprite sprite, Tile template)
+    {
+        Tile tile = ScriptableObject.CreateInstance<Tile>();
+        tile.hideFlags = HideFlags.DontSave;
+        tile.sprite = sprite;
+
+        if (template != null)
+        {
+            tile.color = template.color;
+            tile.colliderType = template.colliderType;
+            tile.transform = template.transform;
+        }
+
+        return tile;
+    }
+
+    // Kafelek dla pola: wylosowany wariant, a gdy rodzaj nie ma wariantów, zwykły kafelek.
+    TileBase PickTile(TileType type, TileBase fallback, int cellIndex)
+    {
+        if (variantTiles.TryGetValue(type, out TileBase[] tiles))
+        {
+            return tiles[variantSeed[cellIndex] % tiles.Length];
+        }
+
+        return fallback;
+    }
+
+    void ApplyVariantsToBlocks()
+    {
+        if (variantTiles.Count == 0)
+        {
+            return;
+        }
+
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int i = Index(x, y);
+                TileType type = grid[i];
+
+                if (type == TileType.SolidWall || type == TileType.Pillar || TileRules.IsDestructible(type))
+                {
+                    TileBase tile = PickTile(type, null, i);
+
+                    if (tile != null)
+                    {
+                        blocksTilemap.SetTile(new Vector3Int(x, y, 0), tile);
+                    }
+                }
+            }
+        }
+    }
+
+    // Podłoga: dwa warianty układają się w szachownicę, więcej wariantów jest losowanych dla każdego pola.
+    void ApplyFloorVariants()
+    {
+        GameArt art = GameArt.Instance;
+        Sprite[] sprites = art != null ? art.TileVariants(TileType.Empty) : null;
+        int minimum = art != null && art.HasTheme ? 1 : 2;
+
+        if (sprites == null || sprites.Length < minimum)
+        {
+            return;
+        }
+
+        Tilemap ground = null;
+
+        foreach (Tilemap candidate in FindObjectsByType<Tilemap>())
+        {
+            if (candidate.name == "Ground")
+            {
+                ground = candidate;
+                break;
+            }
+        }
+
+        if (ground == null)
+        {
+            return;
+        }
+
+        Tile template = ground.GetTile(new Vector3Int(1, 1, 0)) as Tile;
+        List<TileBase> tiles = new List<TileBase>();
+
+        foreach (Sprite sprite in sprites)
+        {
+            if (sprite != null)
+            {
+                tiles.Add(CreateVariantTile(sprite, template));
+            }
+        }
+
+        if (tiles.Count < minimum)
+        {
+            return;
+        }
+
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int index = tiles.Count <= 2 ? (x + y) % tiles.Count : Random.Range(0, tiles.Count);
+                ground.SetTile(new Vector3Int(x, y, 0), tiles[index]);
+            }
+        }
+    }
+
+    // Maluje w Blocks Tilemap ramkę z kodu oraz wnętrze skopiowane z losowego prefabu układu.
+    // Układ zawiera tylko kafelki filarów, stałych bloków i pól NoSpawn. Resztę dosypuje GenerateDestructibleBlocks.
+    void ApplyRandomLayout()
+    {
+        // bierzemy tylko układy narysowane dla bieżącego rozmiaru siatki, puste pola na liście pomijamy
+        List<GameObject> compatible = new List<GameObject>();
+
+        foreach (GameObject candidate in layouts)
+        {
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            MapLayoutGuide guide = candidate.GetComponent<MapLayoutGuide>();
+
+            if (guide == null || guide.FitsGrid(Width, Height))
+            {
+                compatible.Add(candidate);
+            }
+        }
+
+        if (compatible.Count == 0)
+        {
+            Debug.LogWarning("GridMap: na liście nie ma układów dla siatki " + Width + " x " + Height
+                + ". Użyj przycisku 'Przypisz układy' w obiekcie GameArt albo zmień rozmiar planszy.", this);
+            return;
+        }
+
+        // do oglądania: konkretny układ (numer liczony wśród pasujących do rozmiaru), bez losowego odbicia
+        bool forced = forcedLayoutIndex >= 0 && forcedLayoutIndex < compatible.Count;
+        GameObject prefab = forced ? compatible[forcedLayoutIndex] : compatible[Random.Range(0, compatible.Count)];
+
+        Debug.Log("GridMap: układ '" + prefab.name + "'" + (forced ? " (wybrany ręcznie)" : "") + ".", this);
+
+        // prefab czytamy z tymczasowej kopii, bo tilemapa z pliku nie zawsze oddaje kafelki
+        GameObject copy = Instantiate(prefab);
+        copy.SetActive(false);
+        Tilemap source = copy.GetComponentInChildren<Tilemap>(true);
+
+        if (source == null)
+        {
+            Debug.LogWarning("GridMap: układ '" + prefab.name + "' nie ma Tilemapy.", this);
+            Destroy(copy);
+            return;
+        }
+
+        bool flipX = randomFlip && !forced && Random.value < 0.5f;
+        bool flipY = randomFlip && !forced && Random.value < 0.5f;
+
+        blocksTilemap.ClearAllTiles();
+
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                bool border = x == 0 || y == 0 || x == Width - 1 || y == Height - 1;
+                TileBase tile = border
+                    ? borderTile
+                    : source.GetTile(new Vector3Int(flipX ? Width - 1 - x : x, flipY ? Height - 1 - y : y, 0));
+
+                if (tile != null)
+                {
+                    blocksTilemap.SetTile(new Vector3Int(x, y, 0), tile);
+                }
+            }
+        }
+
+        Destroy(copy);
     }
 
     void ReadTilemap()
     {
-        for (int y = 0; y < Size; y++)
+        for (int y = 0; y < Height; y++)
         {
-            for (int x = 0; x < Size; x++)
+            for (int x = 0; x < Width; x++)
             {
                 int i = Index(x, y);
                 Vector3Int tilePos = new Vector3Int(x, y, 0);
@@ -194,9 +483,9 @@ public class GridMap : MonoBehaviour
 
     void GenerateDestructibleBlocks()
     {
-        for (int y = 1; y < Size - 1; y++)
+        for (int y = 1; y < Height - 1; y++)
         {
-            for (int x = 1; x < Size - 1; x++)
+            for (int x = 1; x < Width - 1; x++)
             {
                 int i = Index(x, y);
 
@@ -206,13 +495,30 @@ public class GridMap : MonoBehaviour
                     continue;
                 }
 
-                if (Random.value < blockSpawnChance)
+                // wokół fontanny zostaje wolny pierścień, a przez środek biegną dwie otwarte aleje
+                if (IsFountainRing(x, y) || IsOpenLane(x, y))
+                {
+                    continue;
+                }
+
+                if (Random.value < blockSpawnChance * densityScale)
                 {
                     grid[i] = PickBlock(x, y);
                     UpdateTileVisual(x, y);
                 }
             }
         }
+    }
+
+    // Pole w odległości do 2 od środka planszy (fontanna 3 x 3 i jeden rząd wokół niej).
+    bool IsFountainRing(int x, int y)
+    {
+        return keepFountainRingFree && Mathf.Abs(x - Width / 2) <= 2 && Mathf.Abs(y - Height / 2) <= 2;
+    }
+
+    bool IsOpenLane(int x, int y)
+    {
+        return openCenterLanes && (x == Width / 2 || y == Height / 2);
     }
 
     bool IsPlayerSpawnArea(int x, int y)
@@ -285,6 +591,12 @@ public class GridMap : MonoBehaviour
             case TileType.SodaPuddle: puddleTile = sodaPuddleTile; break;
         }
 
+        // jeśli rodzaj ma kilka wariantów w GameArt, bierzemy wariant wylosowany dla tego pola
+        int cellIndex = Index(x, y);
+        TileType currentType = grid[cellIndex];
+        blockTile = blockTile != null ? PickTile(currentType, blockTile, cellIndex) : null;
+        puddleTile = puddleTile != null ? PickTile(currentType, puddleTile, cellIndex) : null;
+
         if (effectsTilemap == null)
         {
             SetTileIfDifferent(blocksTilemap, tilePos, blockTile != null ? blockTile : puddleTile);
@@ -303,32 +615,39 @@ public class GridMap : MonoBehaviour
         }
     }
 
-    public void DestroyBlock(Vector2Int cell)
+    // source to to, co uderza (bomba, rakieta). Ta sama eksplozja nie trafia bloku dwa razy,
+    // ale każda kolejna bomba liczy się jako osobne trafienie, nawet gdy wybuchnie w tej samej chwili.
+    // Dzięki temu gruba czekolada znika, gdy dostaną ją dwie bomby (np. gracza i bota).
+    public void DestroyBlock(Vector2Int cell, object source = null)
     {
         if (!InBounds(cell)) return;
 
         int i = Index(cell);
-        if (Time.time < blockImmuneUntil[i]) return;
+
+        if (source != null && ReferenceEquals(blockLastHitBy[i], source)) return;
 
         TileType current = grid[i];
 
         switch (current)
         {
             case TileType.Cookie:
+                blockLastHitBy[i] = null;
                 grid[i] = TileType.Empty;
                 UpdateTileVisual(cell.x, cell.y);
                 BlockDestroyed?.Invoke(cell, current);
                 break;
             case TileType.HeavyCookie:
+                blockLastHitBy[i] = source;
                 grid[i] = TileType.Cookie;
-                blockImmuneUntil[i] = Time.time + blockHitCooldown;
                 UpdateTileVisual(cell.x, cell.y);
                 break;
             case TileType.HoneyBlock:
+                blockLastHitBy[i] = null;
                 SpreadPuddle(cell, TileType.HoneyPuddle, honeyPuddleDuration);
                 BlockDestroyed?.Invoke(cell, current);
                 break;
             case TileType.SodaBlock:
+                blockLastHitBy[i] = null;
                 SpreadPuddle(cell, TileType.SodaPuddle, sodaPuddleDuration);
                 BlockDestroyed?.Invoke(cell, current);
                 break;
@@ -422,7 +741,7 @@ public class GridMap : MonoBehaviour
             grid[i] = TileType.Cookie;
         }
 
-        blockImmuneUntil[i] = 0f;
+        blockLastHitBy[i] = null;
         DestroyBlock(cell);
         return true;
     }
@@ -444,7 +763,7 @@ public class GridMap : MonoBehaviour
 
     static bool InBounds(Vector2Int cell)
     {
-        return cell.x >= 0 && cell.y >= 0 && cell.x < Size && cell.y < Size;
+        return cell.x >= 0 && cell.y >= 0 && cell.x < Width && cell.y < Height;
     }
 
     public void SetBomb(Vector2Int cell, bool hasBomb)
@@ -475,9 +794,9 @@ public class GridMap : MonoBehaviour
 
         Vector3 size = new Vector3(0.9f, 0.9f, 0f);
 
-        for (int y = 0; y < Size; y++)
+        for (int y = 0; y < Height; y++)
         {
-            for (int x = 0; x < Size; x++)
+            for (int x = 0; x < Width; x++)
             {
                 int i = Index(x, y);
                 TileType type = grid[i];

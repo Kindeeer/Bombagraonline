@@ -34,6 +34,9 @@ public class PlayerMovement : MonoBehaviour
 
     public Vector2Int currentCell;
 
+    // Tryb debug (menu pod TAB): postać przechodzi przez bloki, ściany, bomby i innych graczy, ale zostaje w obrębie planszy.
+    [HideInInspector] public bool noclip;
+
     public Facing Facing { get; private set; } = Facing.Down;
     public bool IsMoving { get; private set; }
 
@@ -51,6 +54,13 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        // na starcie rundy (do napisu GO!) postać stoi w miejscu
+        if (MatchManager.InputLocked)
+        {
+            IsMoving = false;
+            return;
+        }
+
         Vector2 position = transform.position;
         Vector2Int input = ReadInput();
         UpdateNewestAxis(input);
@@ -65,16 +75,67 @@ public class PlayerMovement : MonoBehaviour
         }
 
         Vector2Int direction = ChooseDirection(position, input);
-        Facing = ToFacing(direction);
-
         float distance = CalculateSpeed() * Mathf.Min(Time.deltaTime, 0.05f);
         Vector2 startPosition = position;
 
         Move(ref position, direction, distance);
 
-        IsMoving = (position - startPosition).sqrMagnitude > 0.000001f;
+        bool moved = (position - startPosition).sqrMagnitude > 0.000001f;
+        bool twoKeys = input.x != 0 && input.y != 0;
+
+        // dwa klawisze naraz (np. W + A), a wybrany kierunek jest zablokowany: próbujemy drugiej osi,
+        // żeby postać nie utknęła w miejscu
+        if (!moved && twoKeys)
+        {
+            Vector2Int other = direction.x != 0 ? new Vector2Int(0, input.y) : new Vector2Int(input.x, 0);
+            Move(ref position, other, distance);
+            moved = (position - startPosition).sqrMagnitude > 0.000001f;
+
+            if (moved)
+            {
+                direction = other;
+            }
+        }
+
+        // postać stoi, bo obie strony są zablokowane: sprite i tak obraca się w stronę ostatnio wciśniętego klawisza
+        if (!moved && twoKeys)
+        {
+            direction = newestIsHorizontal ? new Vector2Int(input.x, 0) : new Vector2Int(0, input.y);
+        }
+
+        Facing = ToFacing(direction);
+        IsMoving = moved;
         transform.position = new Vector3(position.x, position.y, transform.position.z);
         currentCell = GridMap.Instance.WorldToGrid(position);
+
+        // przedmiot "Kopanie bomb": idąc w bombę, której nie da się ominąć, postać ją odkopuje
+        if (!moved)
+        {
+            TryKickBomb(position, direction);
+        }
+    }
+
+    void TryKickBomb(Vector2 position, Vector2Int direction)
+    {
+        PlayerPickups pickups = PickupsOf();
+
+        if (pickups == null || !pickups.CanKick || direction == Vector2Int.zero)
+        {
+            return;
+        }
+
+        // postać musi stać mniej więcej na środku pola, żeby kopnąć bombę prosto przed sobą
+        if (Mathf.Abs(LateralOffset(position, direction)) > 0.3f)
+        {
+            return;
+        }
+
+        Vector2Int target = GridMap.Instance.WorldToGrid(position) + direction;
+
+        if (BombRegistry.TryGet(target, out Bomb bomb))
+        {
+            bomb.Kick(direction);
+        }
     }
 
     // "Ostatni klawisz wygrywa", ale przy dwóch klawiszach tylko wtedy, gdy da się tam od razu skręcić.
@@ -130,6 +191,15 @@ public class PlayerMovement : MonoBehaviour
     // Dopiero gdy coś blokuje, ześlizguje się na środek wolnego przejścia (z prędkością chodzenia) i idzie dalej.
     void Move(ref Vector2 position, Vector2Int direction, float distance)
     {
+        if (noclip)
+        {
+            Vector2 free = position + new Vector2(direction.x, direction.y) * distance;
+            position = new Vector2(
+                Mathf.Clamp(free.x, HalfSize, GridMap.Width - HalfSize),
+                Mathf.Clamp(free.y, HalfSize, GridMap.Height - HalfSize));
+            return;
+        }
+
         Vector2 straight = position + new Vector2(direction.x, direction.y) * distance;
 
         if (!Collides(straight, position))
@@ -275,7 +345,9 @@ public class PlayerMovement : MonoBehaviour
         {
             for (int y = minY; y <= maxY; y++)
             {
-                if (IsSolid(new Vector2Int(x, y), current))
+                Vector2Int cell = new Vector2Int(x, y);
+
+                if (GridMap.Instance.IsWall(cell) || BombBlocks(cell, position, current))
                 {
                     return true;
                 }
@@ -283,6 +355,32 @@ public class PlayerMovement : MonoBehaviour
         }
 
         return false;
+    }
+
+    // Bomba blokuje ruch. Wyjątek: kto jeszcze stoi na bombie (właśnie ją postawił), może z niej zejść,
+    // ale tylko "na zewnątrz": ruch, który zwiększałby nachodzenie na bombę (np. powrót przez nią), jest zablokowany.
+    // Dzięki temu nie da się przejść przez bombę, gdy postać zdąży zejść tylko do połowy.
+    static bool BombBlocks(Vector2Int cell, Vector2 position, Vector2 current)
+    {
+        if (!BombRegistry.HasBomb(cell))
+        {
+            return false;
+        }
+
+        if (!Overlaps(current, cell))
+        {
+            return true;
+        }
+
+        return Penetration(position, cell) > Penetration(current, cell) + 0.0001f;
+    }
+
+    // Pole powierzchni, na którym ciało postaci (kwadrat o boku 1) zachodzi na pole.
+    static float Penetration(Vector2 position, Vector2Int cell)
+    {
+        float overlapX = Mathf.Max(0f, 1f - Mathf.Abs(position.x - (cell.x + 0.5f)));
+        float overlapY = Mathf.Max(0f, 1f - Mathf.Abs(position.y - (cell.y + 0.5f)));
+        return overlapX * overlapY;
     }
 
     bool IsSolid(Vector2Int cell, Vector2 current)
@@ -324,6 +422,36 @@ public class PlayerMovement : MonoBehaviour
             return aiInput;
         }
 
+        // klawiatura ma pierwszeństwo, a gdy nic nie wciśnięto, czytamy joystick ekranowy
+        Vector2Int keys = ReadKeyboard();
+        Vector2Int result = keys != Vector2Int.zero ? keys : TouchInput.Move;
+
+        // klątwa "zawroty głowy": sterowanie jest odwrócone
+        PlayerPickups pickups = PickupsOf();
+
+        if (result != Vector2Int.zero && pickups != null && pickups.ReverseControls)
+        {
+            result = -result;
+        }
+
+        return result;
+    }
+
+    PlayerPickups cachedPickups;
+
+    // Komponent przedmiotów tej postaci (dodaje go PlayerStats, więc szukamy leniwie).
+    PlayerPickups PickupsOf()
+    {
+        if (cachedPickups == null)
+        {
+            cachedPickups = GetComponent<PlayerPickups>();
+        }
+
+        return cachedPickups;
+    }
+
+    Vector2Int ReadKeyboard()
+    {
 #if ENABLE_INPUT_SYSTEM
         Keyboard keyboard = Keyboard.current;
 

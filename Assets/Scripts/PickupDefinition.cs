@@ -26,6 +26,12 @@ public class PickupDefinition : ScriptableObject
     public int extraRange;
     [Tooltip("Speed steps (step size is set in PlayerStats). Permanent/Timed only.")]
     public int speedSteps;
+    [Tooltip("Zmiana długości lontu bomb w sekundach (ujemna = bomby wybuchają szybciej). Permanent/Timed only.")]
+    public float fuseChange;
+
+    [Header("Efekt specjalny (tarcza, kopanie bomb, klątwy)")]
+    [Tooltip("Permanent: tarcza i kopanie bomb. Timed: gwiazda, odwrócone sterowanie, automatyczne bomby.")]
+    public PickupEffect effect = PickupEffect.None;
     [Tooltip("Timed only.")]
     [Min(0.1f)] public float durationSeconds = 8f;
 
@@ -41,7 +47,22 @@ public class PickupDefinition : ScriptableObject
     [Min(0)] public int weightFromBlocks = 10;
     [Min(0)] public int weightFromFountain = 10;
 
-    public Sprite Icon => icon != null ? icon : PickupArt.Icon(placeholderIcon);
+    // Najpierw grafika z obiektu GameArt (dla wbudowanych ikon), potem własna ikona tej definicji, na końcu zastępcza.
+    public Sprite Icon
+    {
+        get
+        {
+            GameArt art = GameArt.Instance;
+            Sprite fromArt = art != null ? art.IconFor(placeholderIcon) : null;
+
+            if (fromArt != null)
+            {
+                return fromArt;
+            }
+
+            return icon != null ? icon : PickupArt.Icon(placeholderIcon);
+        }
+    }
 
     // Trafia do slotu Buff (zamiast działać od razu).
     public bool IsHeld => special != SpecialItem.None || mode == PickupMode.NextBomb;
@@ -52,7 +73,24 @@ public enum SpecialItem
 {
     None,
     Hammer,
-    Rocket
+    Rocket,
+    Teleport
+}
+
+// Efekty poza zwykłymi statystykami.
+public enum PickupEffect
+{
+    None,
+    // chroni przed jednym wybuchem
+    Shield,
+    // przez jakiś czas nic nie robi obrażeń
+    Invincibility,
+    // postać odkopuje bomby, idąc w ich stronę
+    Kick,
+    // klątwa: sterowanie jest odwrócone
+    ReverseControls,
+    // klątwa: postać sama zostawia bomby
+    AutoBombs
 }
 
 // Jak długo działa efekt przedmiotu (dla przedmiotów bez Special).
@@ -75,5 +113,14 @@ public enum PickupIcon
     Speed,
     Hammer,
     Rocket,
-    Skull
+    Skull,
+    Shield,
+    Star,
+    Boot,
+    Bolt,
+    Clock,
+    Swirl,
+    Dizzy,
+    MegaBomb,
+    BombStorm
 }
