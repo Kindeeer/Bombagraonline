@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Kick
   m_EditorClassIdentifier: Assembly-CSharp::PickupDefinition
   displayName: Kopanie bomb
-  description: "Id\u017A w bomb\u0119, \u017Ceby j\u0105 odkopn\u0105\u0107. Jedzie, a\u017C w co\u015B uderzy."
+  description: Idź w bombę, żeby ją kopnąć. Jedno kopnięcie, kumulują się (do 3).
   icon: {fileID: 0}
   placeholderIcon: 9
   bubbleTint: {r: 1, g: 1, b: 1, a: 1}

@@ -44,6 +44,19 @@ public class ArenaCamera : MonoBehaviour
 
     public ViewMode Mode => mode;
 
+    // Po śmierci gracza kamera pokazuje całą planszę i zostaje tak do końca rundy (można oglądać pozostałych).
+    public bool Spectating { get; private set; }
+
+    // Proporcje całej planszy z marginesami (szerokość / wysokość). Używa ich HUD do ustalenia szerokości paneli bocznych.
+    public float WorldAspect
+    {
+        get
+        {
+            float extra = decorationCells + marginCells;
+            return (GridMap.Width + extra * 2f) / (GridMap.Height + extra * 2f + topOverhangCells);
+        }
+    }
+
     ViewMode mode;
     Camera cam;
     int lastWidth;
@@ -63,6 +76,12 @@ public class ArenaCamera : MonoBehaviour
     // Zmienia widok. instant = true ustawia go od razu, bez płynnego przejścia.
     public void SetMode(ViewMode newMode, bool instant = false)
     {
+        // w trybie oglądania (po śmierci) nic nie zmienia widoku z całej planszy
+        if (Spectating && newMode != ViewMode.Whole)
+        {
+            return;
+        }
+
         mode = newMode;
 
         if (instant)
@@ -102,10 +121,11 @@ public class ArenaCamera : MonoBehaviour
 
     void LateUpdate()
     {
-        bool screenChanged = Screen.width != lastWidth || Screen.height != lastHeight || Screen.safeArea != lastSafeArea;
+        bool screenChanged = Screen.width != lastWidth || Screen.height != lastHeight || ScreenInsets.SafeArea != lastSafeArea;
 
         if (Application.isPlaying)
         {
+            CheckSpectating();
             GetMetrics(out _, out _, out _, out _, out _, out _, out float fitRows);
 
             float mediumRows = Mathf.Min(fitRows, mediumViewRows);
@@ -150,6 +170,23 @@ public class ArenaCamera : MonoBehaviour
         Fit();
     }
 
+    // Gdy lokalny gracz zginie, przechodzimy do widoku całej planszy.
+    void CheckSpectating()
+    {
+        if (Spectating)
+        {
+            return;
+        }
+
+        MatchManager match = MatchManager.Instance;
+
+        if (match != null && match.Slots[0] != null && match.Slots[0].health != null && match.Slots[0].health.IsDead)
+        {
+            Spectating = true;
+            SetMode(ViewMode.Whole);
+        }
+    }
+
     // Lokalny gracz to slot 0 w MatchManager (boty zajmują kolejne sloty).
     bool TryGetPlayerPosition(out Vector2 position)
     {
@@ -188,7 +225,7 @@ public class ArenaCamera : MonoBehaviour
     void GetMetrics(out Rect safe, out float availableLeft, out float availableRight, out float availableWidth,
         out float availableHeight, out float fitPixelsPerUnit, out float fitRows)
     {
-        safe = useSafeArea ? Screen.safeArea : new Rect(0f, 0f, Screen.width, Screen.height);
+        safe = useSafeArea ? ScreenInsets.SafeArea : new Rect(0f, 0f, Screen.width, Screen.height);
 
         availableLeft = safe.xMin + safe.width * leftPanel;
         availableRight = safe.xMax - safe.width * rightPanel;
@@ -212,7 +249,7 @@ public class ArenaCamera : MonoBehaviour
 
         lastWidth = Screen.width;
         lastHeight = Screen.height;
-        lastSafeArea = Screen.safeArea;
+        lastSafeArea = ScreenInsets.SafeArea;
 
         GetMetrics(out Rect safe, out float availableLeft, out float availableRight, out float availableWidth,
             out float availableHeight, out float fitPixelsPerUnit, out float fitRows);
@@ -237,6 +274,19 @@ public class ArenaCamera : MonoBehaviour
             focus = Vector2.Lerp(focus, followFocus, followBlend);
         }
 
+        // w grze kamera rysuje tylko okno między panelami (viewport), więc po przybliżeniu plansza nie prześwituje pod
+        // panelami, przyciskami i ramką HUD, a kadr jest wyśrodkowany w tym oknie
+        if (Application.isPlaying)
+        {
+            cam.rect = new Rect(availableLeft / Screen.width, safe.yMin / Screen.height,
+                availableWidth / Screen.width, availableHeight / Screen.height);
+            cam.orthographicSize = Mathf.Max(0.01f, rowsNow * 0.5f);
+            transform.position = new Vector3(focus.x, focus.y, transform.position.z);
+            return;
+        }
+
+        // w edytorze (poza grą) kamera zostaje na całym ekranie
+        cam.rect = new Rect(0f, 0f, 1f, 1f);
         cam.orthographicSize = Screen.height / (2f * pixelsPerUnit);
 
         Vector2 areaCenter = new Vector2((availableLeft + availableRight) * 0.5f, safe.center.y);

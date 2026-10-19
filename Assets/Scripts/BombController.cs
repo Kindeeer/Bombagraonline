@@ -8,9 +8,6 @@ public class BombController : MonoBehaviour
 {
     public Bomb bombPrefab;
 
-    [Tooltip("Nie pozwala postawić bomby na polu, które zachodzi ciałem inny gracz lub bot (np. stojący między dwoma polami).")]
-    public bool blockBombOnOtherPlayers = true;
-
     // co ile sekund klątwa "biegunka bomb" zostawia bombę
     const float AutoBombInterval = 0.9f;
     float autoBombTimer;
@@ -45,6 +42,17 @@ public class BombController : MonoBehaviour
         // do napisu GO! nie można stawiać bomb
         if (MatchManager.InputLocked)
         {
+            return;
+        }
+
+        // podczas celowania atomówką przycisk akcji (ATOM na ekranie, Spacja na klawiaturze) zrzuca ją w wybrane miejsce
+        if (movement != null && movement.Frozen)
+        {
+            if (movement.useKeyboard && (PlaceKeyPressed() || TouchInput.ConsumeBomb()))
+            {
+                NukeTargeting.ConfirmActive();
+            }
+
             return;
         }
 
@@ -129,7 +137,7 @@ public class BombController : MonoBehaviour
     {
         Vector2Int cell = GridMap.Instance.WorldToGrid(transform.position);
 
-        if (BombRegistry.HasBomb(cell) || (blockBombOnOtherPlayers && OverlapsOtherPlayer(cell)))
+        if (BombRegistry.HasBomb(cell))
         {
             return false;
         }
@@ -144,37 +152,6 @@ public class BombController : MonoBehaviour
         }
 
         return true;
-    }
-
-    // Ciało gracza ma rozmiar pola, więc zachodzi na pole, gdy środek jest bliżej niż pole minus drobny margines.
-    // Bez tej blokady bomby mogłyby stanąć po obu stronach gracza stojącego na granicy pól (BOMBA|BOT|BOMBA).
-    bool OverlapsOtherPlayer(Vector2Int cell)
-    {
-        MatchManager match = MatchManager.Instance;
-
-        if (match == null)
-        {
-            return false;
-        }
-
-        Vector3 center = GridMap.Instance.GridToWorld(cell);
-
-        foreach (Combatant other in match.Slots)
-        {
-            if (other == null || !other.IsAlive || other.health.transform == transform)
-            {
-                continue;
-            }
-
-            Vector3 offset = other.health.transform.position - center;
-
-            if (Mathf.Abs(offset.x) < 0.95f && Mathf.Abs(offset.y) < 0.95f)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     void OnBombExploded(Bomb bomb)

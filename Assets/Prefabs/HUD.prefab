@@ -276,16 +276,16 @@ MonoBehaviour:
   playerSlots:
   - background: {fileID: 960027809689126094}
     face: {fileID: 8725942908656738759}
-    label: {fileID: 6849736896750991037}
+    label: {fileID: 0}
   - background: {fileID: 2910666531785407418}
     face: {fileID: 3734342105145879687}
-    label: {fileID: 1611232672449186865}
+    label: {fileID: 0}
   - background: {fileID: 5985325109032740557}
     face: {fileID: 7237079645581417407}
-    label: {fileID: 1110014533769219593}
+    label: {fileID: 0}
   - background: {fileID: 5741580763806714949}
     face: {fileID: 2815785322235554599}
-    label: {fileID: 8323731010564519112}
+    label: {fileID: 0}
   playerColors:
   - {r: 0.3, g: 0.78, b: 0.35, a: 1}
   - {r: 1, g: 0.86, b: 0.25, a: 1}
@@ -299,10 +299,10 @@ MonoBehaviour:
   emptySlotAlpha: 0.3
   buffIcon: {fileID: 1996853939438417276}
   buffEmpty: {fileID: 4377755277708197128}
-  buffName: {fileID: 6438541181542254691}
-  buffCount: {fileID: 8986313646732344945}
+  buffName: {fileID: 0}
+  buffCount: {fileID: 0}
   actionIcon: {fileID: 6081156730916026409}
-  actionBadge: {fileID: 4801477182473895546}
+  actionBadge: {fileID: 0}
   bombIcon: {fileID: 21300000, guid: db022f1445c75294db5e0af34d666042, type: 3}
 --- !u!1 &638481424557103745
 GameObject:

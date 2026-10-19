@@ -156,7 +156,12 @@ public class ChocolateFountain : MonoBehaviour
         float dt = Time.deltaTime;
         time += dt;
 
-        UpdateSchedule(dt);
+        // przed startem rundy (menu, READY) fontanna czeka i nie wyrzuca przedmiotów
+        if (!MatchManager.InputLocked)
+        {
+            UpdateSchedule(dt);
+        }
+
         UpdateEmission(dt);
         UpdateDrops(dt);
         UpdateStream();

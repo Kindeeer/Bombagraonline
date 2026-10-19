@@ -45,8 +45,9 @@ public class RoundIntro : MonoBehaviour
     }
 
     // Pokazuje napis na podany czas: wskakuje z powiększeniem, a pod koniec blednie.
-    public IEnumerator Show(string text, Color color, float seconds)
+    public IEnumerator Show(string text, Color color, float seconds, float fontSize = 240f)
     {
+        label.fontSize = fontSize;
         label.text = text;
         label.color = color;
         label.enabled = true;

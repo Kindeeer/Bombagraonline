@@ -177,6 +177,8 @@ public static class PickupArt
                 return Build("icon_megabomb", 64, 64, ppu, center, DrawMegaBomb);
             case PickupIcon.BombStorm:
                 return Build("icon_bombstorm", 64, 64, ppu, center, DrawBombStorm);
+            case PickupIcon.Nuke:
+                return Build("icon_nuke", 64, 64, ppu, center, DrawNuke);
             default:
                 return null;
         }
@@ -245,6 +247,17 @@ public static class PickupArt
         l.Outlined(Circle(x, y, 31f, 27f, 21f), new Color(0.16f, 0.16f, 0.20f), new Color(0.95f, 0.25f, 0.2f), 2.2f);
         l.Draw(Circle(x, y, 23f, 36f, 5.5f), new Color(0.6f, 0.6f, 0.75f, 0.9f));
         l.Outlined(Circle(x, y, 48f, 56f, 5.5f), new Color(1f, 0.8f, 0.15f), new Color(0.9f, 0.35f, 0.05f), 1.2f);
+    }
+
+    // Atomówka: pionowy pocisk ze statecznikami i żółtym znakiem radiacji.
+    static void DrawNuke(Layers l, float x, float y)
+    {
+        float fins = Mathf.Min(RotatedBox(x, y, 21f, 14f, 3.5f, 8f, 22f), RotatedBox(x, y, 43f, 14f, 3.5f, 8f, -22f));
+        l.Outlined(fins, new Color(0.25f, 0.30f, 0.24f), Outline, 1.3f);
+        l.Outlined(Capsule(x, y, 32f, 17f, 32f, 45f, 9.5f), new Color(0.42f, 0.50f, 0.36f), Outline, 1.6f);
+        l.Outlined(Circle(x, y, 32f, 36f, 6.5f), new Color(1f, 0.85f, 0.1f), Outline, 1.2f);
+        l.Draw(Circle(x, y, 32f, 36f, 2.2f), new Color(0.15f, 0.15f, 0.15f));
+        l.Draw(Box(x, y, 32f, 24f, 9f, 2f), new Color(0.15f, 0.15f, 0.15f));
     }
 
     static void DrawBombStorm(Layers l, float x, float y)

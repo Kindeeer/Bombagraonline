@@ -70,7 +70,9 @@ public class GameArt : MonoBehaviour
         lastSearchFrame = -1;
     }
 
-    [Header("Gracze (P1 = Ty, P2-P4 = boty albo inni gracze)")]
+    [Header("Skiny postaci (menu Skins). Dodaj kolejną postać: powiększ listę i wpisz grafiki nowego elementu")]
+    [Tooltip("Każdy element to jeden skin w menu Skins. Pierwsze 4 są domyślne, kolejne można dodawać bez limitu. " +
+        "Wybrany skin gra gracz, pozostałe dostają boty po kolei. Pole Label to nazwa pod postacią w menu.")]
     public PlayerSprites[] players = DefaultPlayers();
 
     [Header("Motywy (opcjonalnie): zestawy grafik planszy, fontanny, bomby i ognia")]
@@ -141,12 +143,31 @@ public class GameArt : MonoBehaviour
     public Sprite iconDizzy;
     public Sprite iconMegaBomb;
     public Sprite iconBombStorm;
+    public Sprite iconNuke;
 
     [Header("Emotki (128 x 128 px, w HD 256 x 256)")]
     public Sprite emoteAngry;
     public Sprite emoteLaugh;
     public Sprite emoteCry;
     public Sprite emoteLike;
+
+    [Header("Menu główne (puste pole = kod rysuje prosty zamiennik)")]
+    [Tooltip("Tło menu na cały ekran.")]
+    public Sprite menuBackground;
+    [Tooltip("Logo gry nad przyciskami.")]
+    public Sprite menuLogo;
+    [Tooltip("Tło przycisków menu (rozciągane, 9-slice). Puste = zaokrąglony prostokąt z kodu.")]
+    public Sprite menuButton;
+    [Tooltip("Przycisk po najechaniu myszką. Puste = jaśniejsza nakładka z kodu.")]
+    public Sprite menuButtonHover;
+    [Tooltip("Przycisk po kliknięciu (wciśnięty). Puste = ciemniejsza nakładka z kodu.")]
+    public Sprite menuButtonPressed;
+    [Tooltip("Ramka karty skina w menu Skins (rozciągana, 9-slice).")]
+    public Sprite menuCard;
+    [Tooltip("Karta skina po najechaniu myszką. Puste = jaśniejsza nakładka z kodu.")]
+    public Sprite menuCardHover;
+    [Tooltip("Karta skina po kliknięciu. Puste = ciemniejsza nakładka z kodu.")]
+    public Sprite menuCardPressed;
 
     [Header("Interfejs (HUD)")]
     [Tooltip("Tło paneli i przycisków (rozciągane, 9-slice).")]
@@ -160,6 +181,21 @@ public class GameArt : MonoBehaviour
     public Sprite uiCrown;
     [Tooltip("Ikona na przycisku bomby.")]
     public Sprite uiBombButton;
+    [Header("Ramka i panele HUD (jak nakładka w Bomb It): panele boczne i ramka wokół okna z planszą")]
+    [Tooltip("Tło paneli bocznych (rozciągane, 9-slice). Puste = zaokrąglony prostokąt z kodu.")]
+    public Sprite hudPanelSprite;
+    [Tooltip("Ramka wokół okna z planszą (rozciągana, 9-slice, środek przezroczysty). Puste = prosta ramka z kodu.")]
+    public Sprite hudMapFrameSprite;
+    [Tooltip("Kolor tła paneli bocznych (przy własnym sprite'cie barwi go, biały = bez zmian).")]
+    public Color hudPanelColor = new Color(0.48f, 0.18f, 0.33f, 1f);
+    [Tooltip("Kolor ramki wokół planszy (przy własnym sprite'cie barwi go, biały = bez zmian).")]
+    public Color hudFrameColor = new Color(0.40f, 0.20f, 0.13f, 1f);
+    [Tooltip("Grubość prostej ramki z kodu (jednostki interfejsu). Własny sprite ma swoją grubość.")]
+    [Range(8f, 80f)] public float hudFrameThickness = 28f;
+
+    [Header("Interfejs: zębatka i joystick")]
+    [Tooltip("Ikona zębatki (ustawienia/pauza) obok CAM i EMOTKI. Puste = zębatka rysowana w kodzie.")]
+    public Sprite uiGear;
     public Sprite joystickRing;
     public Sprite joystickKnob;
 
@@ -185,10 +221,36 @@ public class GameArt : MonoBehaviour
         instance = this;
     }
 
-    // Grafiki gracza dla danego slotu (0 = P1). Zwraca null, gdy slotu nie ma.
+    // Grafiki gracza dla danego slotu rundy (0 = Ty, 1-3 = boty). Slot 0 dostaje skin wybrany w menu,
+    // boty dostają pozostałe skiny po kolei. Zwraca null, gdy skinów nie ma.
     public PlayerSprites PlayerFor(int slot)
     {
-        return players != null && slot >= 0 && slot < players.Length ? players[slot] : null;
+        int index = SkinIndexForSlot(slot);
+        return index >= 0 ? players[index] : null;
+    }
+
+    public int SkinCount => players != null ? players.Length : 0;
+
+    // Który skin z listy dostaje dany slot rundy (-1 = brak skinów).
+    public int SkinIndexForSlot(int slot)
+    {
+        int count = SkinCount;
+
+        if (count == 0 || slot < 0)
+        {
+            return -1;
+        }
+
+        int selected = Mathf.Clamp(SkinSelection.Index, 0, count - 1);
+
+        if (slot == 0 || count == 1)
+        {
+            return selected;
+        }
+
+        // boty: kolejne skiny z pominięciem wybranego (przy 4 skinach i wyborze pierwszego: bot 1 = skin 2, bot 2 = skin 3...)
+        int other = (slot - 1) % (count - 1);
+        return other < selected ? other : other + 1;
     }
 
     public Sprite IconFor(PickupIcon icon)
@@ -210,6 +272,7 @@ public class GameArt : MonoBehaviour
             case PickupIcon.Dizzy: return iconDizzy;
             case PickupIcon.MegaBomb: return iconMegaBomb;
             case PickupIcon.BombStorm: return iconBombStorm;
+            case PickupIcon.Nuke: return iconNuke;
             default: return null;
         }
     }
@@ -346,7 +409,8 @@ public class GameArt : MonoBehaviour
     // Po zmianie pola w Inspectorze wpisujemy kafelki w pliki Assets/Tiles (tilemapy i układy używają tych plików).
     void OnValidate()
     {
-        if (players == null || players.Length != 4)
+        // lista skinów ma co najmniej 4 elementy (domyślne postacie), ale może być dłuższa
+        if (players == null || players.Length < 4)
         {
             PlayerSprites[] fixedPlayers = DefaultPlayers();
 
@@ -359,6 +423,14 @@ public class GameArt : MonoBehaviour
             }
 
             players = fixedPlayers;
+        }
+
+        for (int i = 0; i < players.Length; i++)
+        {
+            if (players[i] == null)
+            {
+                players[i] = new PlayerSprites { label = "Skin " + (i + 1) };
+            }
         }
 
         MigrateLegacyFields();
@@ -576,4 +648,41 @@ public class GameArt : MonoBehaviour
         return renderer != null ? renderer.sprite : null;
     }
 #endif
+}
+
+// Wybrany przez gracza skin (menu Skins). Zapamiętany na telefonie. Numer to pozycja na liście GameArt > Skiny postaci.
+public static class SkinSelection
+{
+    const string Key = "selected_skin";
+
+    static int cached = -1;
+
+    // Zmienia się przy każdym wyborze, żeby HUD i postacie wiedziały, że trzeba odświeżyć grafiki.
+    public static int Version { get; private set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        cached = -1;
+        Version = 0;
+    }
+
+    public static int Index
+    {
+        get
+        {
+            if (cached < 0)
+            {
+                cached = Mathf.Max(0, PlayerPrefs.GetInt(Key, 0));
+            }
+
+            return cached;
+        }
+        set
+        {
+            cached = Mathf.Max(0, value);
+            PlayerPrefs.SetInt(Key, cached);
+            Version++;
+        }
+    }
 }

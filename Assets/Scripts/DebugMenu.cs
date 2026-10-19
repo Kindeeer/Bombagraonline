@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using static UiKit;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
@@ -23,7 +24,6 @@ public class DebugMenu : MonoBehaviour
     static bool noclip;
     static bool godMode;
     static DebugMenu instance;
-    static Sprite roundedSprite;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
@@ -32,7 +32,6 @@ public class DebugMenu : MonoBehaviour
         noclip = false;
         godMode = false;
         instance = null;
-        roundedSprite = null;
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -116,7 +115,7 @@ public class DebugMenu : MonoBehaviour
             me.health.godMode = godMode;
         }
 
-        float wanted = open && pauseWhenOpen ? 0f : userTimeScale;
+        float wanted = (open && pauseWhenOpen) || MainMenu.PauseOpen ? 0f : userTimeScale;
 
         if (!Mathf.Approximately(Time.timeScale, wanted))
         {
@@ -173,36 +172,6 @@ public class DebugMenu : MonoBehaviour
         {
             overlay.SetActive(open);
         }
-    }
-
-    // Klikanie w interfejs wymaga EventSystem z modułem wejścia pasującym do ustawień projektu (nowy Input System).
-    static void EnsureEventSystem()
-    {
-        EventSystem eventSystem = EventSystem.current != null ? EventSystem.current : FindAnyObjectByType<EventSystem>();
-
-        if (eventSystem == null)
-        {
-            eventSystem = new GameObject("EventSystem").AddComponent<EventSystem>();
-        }
-
-#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
-        StandaloneInputModule old = eventSystem.GetComponent<StandaloneInputModule>();
-
-        if (old != null)
-        {
-            Destroy(old);
-        }
-
-        if (eventSystem.GetComponent<InputSystemUIInputModule>() == null)
-        {
-            eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
-        }
-#else
-        if (eventSystem.GetComponent<BaseInputModule>() == null)
-        {
-            eventSystem.gameObject.AddComponent<StandaloneInputModule>();
-        }
-#endif
     }
 
     static PickupTable FindTable()
@@ -408,6 +377,8 @@ public class DebugMenu : MonoBehaviour
             () => godMode, value => godMode = value);
         AddToggleRow(page, "Zamroź boty", "Boty stoją w miejscu i nic nie robią.",
             () => FreezeBots, value => FreezeBots = value);
+        AddToggleRow(page, "Loguj zdarzenia audio", "Wypisuje w Console każde zdarzenie dźwiękowe (bez FMOD też). Pomaga podpiąć eventy w FMOD.",
+            () => GameAudio.LogEvents, value => GameAudio.LogEvents = value);
         AddToggleRow(page, "Pauza przy otwartym menu", "Gra stoi, dopóki menu jest otwarte. Wyłącz, żeby oglądać efekty na żywo.",
             () => pauseWhenOpen, value => pauseWhenOpen = value);
     }
@@ -456,6 +427,11 @@ public class DebugMenu : MonoBehaviour
         {
             SetOpen(false);
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        });
+        AddActionRow(page, "Menu główne", "Wraca do ekranu startowego (Play, Skins, Settings).", "Menu", GrayColor, () =>
+        {
+            SetOpen(false);
+            MainMenu.ReturnToMenu();
         });
         AddActionRow(page, "Zabij boty", "Wszystkie boty giną od razu.", "Zabij", RedColor, KillBots);
         AddActionRow(page, "Rozwal wszystkie bloki", "Niszczy każdy blok do zniszczenia (przedmioty mogą wypaść).", "Rozwal", RedColor, SmashAllBlocks);
@@ -679,120 +655,6 @@ public class DebugMenu : MonoBehaviour
                 images[i].color = i == current ? BlueColor : GrayColor;
             }
         });
-    }
-
-    // ---------- Klocki interfejsu: elementy ----------
-
-    static RectTransform NewRect(string name, Transform parent)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-        return (RectTransform)go.transform;
-    }
-
-    static void Stretch(RectTransform rect, float margin = 0f)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = new Vector2(margin, margin);
-        rect.offsetMax = new Vector2(-margin, -margin);
-    }
-
-    static Image NewImage(string name, Transform parent, Color color, bool rounded = true)
-    {
-        Image image = NewRect(name, parent).gameObject.AddComponent<Image>();
-        image.color = color;
-
-        if (rounded)
-        {
-            image.sprite = RoundedSprite();
-            image.type = Image.Type.Sliced;
-        }
-
-        return image;
-    }
-
-    static TextMeshProUGUI NewText(Transform parent, string text, float size, Color color,
-        TextAlignmentOptions alignment, FontStyles style = FontStyles.Normal)
-    {
-        TextMeshProUGUI label = NewRect("Text", parent).gameObject.AddComponent<TextMeshProUGUI>();
-        label.text = text;
-        label.fontSize = size;
-        label.color = color;
-        label.alignment = alignment;
-        label.fontStyle = style;
-        label.raycastTarget = false;
-        return label;
-    }
-
-    static Button NewButton(Transform parent, string text, Color color, Action onClick, float fontSize)
-    {
-        Image image = NewImage("Button", parent, color);
-        Button button = image.gameObject.AddComponent<Button>();
-        button.targetGraphic = image;
-        button.navigation = new Navigation { mode = Navigation.Mode.None };
-
-        // kolor przycisku jest w obrazku, a przycisk tylko go przyciemnia po najechaniu i kliknięciu
-        ColorBlock colors = button.colors;
-        colors.normalColor = Color.white;
-        colors.highlightedColor = new Color(0.88f, 0.88f, 0.88f, 1f);
-        colors.pressedColor = new Color(0.68f, 0.68f, 0.68f, 1f);
-        colors.selectedColor = Color.white;
-        colors.fadeDuration = 0.05f;
-        button.colors = colors;
-
-        button.onClick.AddListener(() =>
-        {
-            onClick?.Invoke();
-
-            // zaznaczony przycisk reagowałby potem na klawisze (np. Enter), więc zdejmujemy zaznaczenie
-            if (EventSystem.current != null)
-            {
-                EventSystem.current.SetSelectedGameObject(null);
-            }
-        });
-
-        TextMeshProUGUI label = NewText(button.transform, text, fontSize, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
-        Stretch(label.rectTransform, 6f);
-        return button;
-    }
-
-    // Prostokąt z zaokrąglonymi rogami (rysowany raz w kodzie, rozciągany jako 9-slice).
-    static Sprite RoundedSprite()
-    {
-        if (roundedSprite != null)
-        {
-            return roundedSprite;
-        }
-
-        const int size = 48;
-        const float radius = 16f;
-
-        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        texture.filterMode = FilterMode.Bilinear;
-        texture.wrapMode = TextureWrapMode.Clamp;
-        texture.hideFlags = HideFlags.HideAndDontSave;
-
-        Color32[] pixels = new Color32[size * size];
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                Vector2 point = new Vector2(x + 0.5f, y + 0.5f);
-                Vector2 inner = new Vector2(Mathf.Clamp(point.x, radius, size - radius), Mathf.Clamp(point.y, radius, size - radius));
-                float alpha = Mathf.Clamp01(radius - Vector2.Distance(point, inner) + 0.5f);
-                pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
-            }
-        }
-
-        texture.SetPixels32(pixels);
-        texture.Apply();
-
-        roundedSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
-            SpriteMeshType.FullRect, new Vector4(radius, radius, radius, radius));
-        roundedSprite.hideFlags = HideFlags.HideAndDontSave;
-        return roundedSprite;
     }
 
     // ---------- Odświeżanie napisów ----------

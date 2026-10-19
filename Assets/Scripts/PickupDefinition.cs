@@ -30,7 +30,7 @@ public class PickupDefinition : ScriptableObject
     public float fuseChange;
 
     [Header("Efekt specjalny (tarcza, kopanie bomb, klątwy)")]
-    [Tooltip("Permanent: tarcza i kopanie bomb. Timed: gwiazda, odwrócone sterowanie, automatyczne bomby.")]
+    [Tooltip("Permanent: tarcza (kumuluje się poza slotem Buff). Kopanie bomb: liczba kopnięć to pole Uses. Timed: gwiazda, odwrócone sterowanie, automatyczne bomby.")]
     public PickupEffect effect = PickupEffect.None;
     [Tooltip("Timed only.")]
     [Min(0.1f)] public float durationSeconds = 8f;
@@ -64,8 +64,9 @@ public class PickupDefinition : ScriptableObject
         }
     }
 
-    // Trafia do slotu Buff (zamiast działać od razu).
-    public bool IsHeld => special != SpecialItem.None || mode == PickupMode.NextBomb;
+    // Trafia do slotu Buff i ma liczbę użyć (zamiast działać od razu na stałe): przedmioty specjalne, przedmioty na następną
+    // bombę i kopanie bomb (każde kopnięcie zużywa jedno użycie).
+    public bool IsHeld => special != SpecialItem.None || mode == PickupMode.NextBomb || (effect == PickupEffect.Kick && mode != PickupMode.Timed);
 }
 
 // Przedmiot specjalny trzymany w slocie Buff i używany Spacją zamiast bomby.
@@ -74,7 +75,9 @@ public enum SpecialItem
     None,
     Hammer,
     Rocket,
-    Teleport
+    Teleport,
+    // Atomówka: gracz stoi w miejscu i klika, gdzie ją zrzucić. Ogromny wybuch, ktoś może zginąć razem z Tobą.
+    Nuke
 }
 
 // Efekty poza zwykłymi statystykami.
@@ -122,5 +125,6 @@ public enum PickupIcon
     Swirl,
     Dizzy,
     MegaBomb,
-    BombStorm
+    BombStorm,
+    Nuke
 }

@@ -12,18 +12,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 584aac5c9759415d93a08b29616ed3d6, type: 3}
   m_Name: SpeedBoost
   m_EditorClassIdentifier: 
-  displayName: Speed Boost
-  description: Walk faster for 8 seconds.
+  displayName: Buty
+  description: Biegasz szybciej. Buty się kumulują (do 5).
   icon: {fileID: 21300000, guid: fdc84d8fa67432a4a95f17b19cfb4f3b, type: 3}
   placeholderIcon: 3
   bubbleTint: {r: 1, g: 1, b: 1, a: 1}
-  mode: 2
+  mode: 0
   extraBombs: 0
   extraRange: 0
-  speedSteps: 2
+  speedSteps: 1
   durationSeconds: 8
   special: 0
   rocketBlastRange: 0
   uses: 1
-  weightFromBlocks: 20
+  weightFromBlocks: 25
   weightFromFountain: 20

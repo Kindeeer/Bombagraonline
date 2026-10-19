@@ -78,6 +78,7 @@ public class PlayerHealth : MonoBehaviour
     void Die()
     {
         isDead = true;
+        GameAudio.Play(AudioEvent.PlayerDeath, transform.position);
         GetComponent<PlayerMovement>().enabled = false;
         GetComponent<BombController>().enabled = false;
 

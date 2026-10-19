@@ -18,6 +18,13 @@ public class PlayerVisual : MonoBehaviour
     public float tiltDegrees = 3f;
     public float settleSpeed = 12f;
 
+    // wygląd z prefabu/sceny (zapamiętany w Awake), do którego wraca postać bez własnych grafik skina
+    Sprite defaultFront;
+    Sprite defaultBack;
+    Sprite defaultLeft;
+    Sprite defaultRight;
+    Color defaultColor = Color.white;
+
     Transform bodyTransform;
     Vector3 basePosition;
     float walkTime;
@@ -39,26 +46,30 @@ public class PlayerVisual : MonoBehaviour
             body = GetComponentInChildren<SpriteRenderer>();
         }
 
+        defaultFront = front;
+        defaultBack = back;
+        defaultLeft = left;
+        defaultRight = right;
+        defaultColor = body.color;
+
         bodyTransform = body.transform;
         basePosition = bodyTransform.localPosition;
     }
 
-    // Ustawia grafiki postaci z GameArt (puste pola zostawiają dotychczasowe). Wołane przez MatchManager.
+    // Ustawia grafiki postaci ze skina (GameArt). Pola skina, których brakuje, wracają do wyglądu domyślnego z prefabu,
+    // więc zmiana skina nie miesza kierunków dwóch postaci. Skin bez żadnych grafik przywraca wygląd domyślny.
     public void SetSprites(PlayerSprites sprites)
     {
-        if (sprites == null || !sprites.HasSprites)
-        {
-            return;
-        }
+        bool has = sprites != null && sprites.HasSprites;
 
-        if (sprites.Front != null) front = sprites.Front;
-        if (sprites.Back != null) back = sprites.Back;
-        if (sprites.Left != null) left = sprites.Left;
-        if (sprites.Right != null) right = sprites.Right;
+        front = has && sprites.Front != null ? sprites.Front : defaultFront;
+        back = has && sprites.Back != null ? sprites.Back : defaultBack;
+        left = has && sprites.Left != null ? sprites.Left : (has ? null : defaultLeft);
+        right = has && sprites.Right != null ? sprites.Right : defaultRight;
 
         if (body != null)
         {
-            body.color = sprites.tint;
+            body.color = has ? sprites.tint : defaultColor;
         }
     }
 

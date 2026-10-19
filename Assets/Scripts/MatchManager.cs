@@ -33,6 +33,17 @@ public class MatchManager : MonoBehaviour
     [Tooltip("Tyle sekund widać wynik rundy, zanim zacznie się następna.")]
     public float restartDelay = 3f;
 
+    [Header("Menu główne")]
+    [Tooltip("Po wciśnięciu Play w edytorze najpierw pokazuje się menu główne (Play, Skins, Settings). Odznacz, żeby od razu grać.")]
+    public bool showMainMenu = true;
+
+    [Header("Chaos (długa runda)")]
+    [Tooltip("Gdy runda trwa długo, włącza się CHAOS: DOUBLE BUFFS. Slot Buff mieści wtedy dwa przedmioty zamiast jednego.")]
+    public bool chaosEnabled = true;
+    [Tooltip("Po ilu sekundach gry (bez READY i pauzy) zaczyna się CHAOS.")]
+    public float chaosAfterSeconds = 75f;
+    public Color chaosColor = new Color(1f, 0.4f, 0.9f);
+
     [Header("Start rundy")]
     [Tooltip("Na starcie widać całą arenę z napisem READY, a po GO! kamera przybliża się i gra rusza.")]
     public bool playIntro = true;
@@ -58,7 +69,31 @@ public class MatchManager : MonoBehaviour
     public bool RoundOver { get; private set; }
 
     // true od startu rundy do napisu GO!: gracz i boty stoją w miejscu i nie stawiają bomb
-    public static bool InputLocked { get; private set; }
+    // Sterowanie jest też zablokowane, gdy otwarta jest pauza (zębatka).
+    public static bool InputLocked
+    {
+        get => introLocked || MainMenu.PauseOpen;
+        private set => introLocked = value;
+    }
+
+    static bool introLocked;
+
+    // true od momentu, gdy w rundzie włączył się CHAOS (DOUBLE BUFFS): slot Buff mieści dwa przedmioty.
+    public static bool ChaosActive { get; private set; }
+
+    float roundClock;
+    int nukeOwner = -1;
+    float nukeWindowUntil;
+    float nukeGraceUntil;
+
+    // Atomówka właśnie wybuchła. Przez chwilę nie rozstrzygamy rundy (postacie giną po kolei), a jeśli zginą wszyscy,
+    // wygrywa ten, kto ją zrzucił.
+    public void NoteNuke(int ownerSlot)
+    {
+        nukeOwner = ownerSlot;
+        nukeWindowUntil = Time.time + 4f;
+        nukeGraceUntil = Time.time + 1.2f;
+    }
 
     string banner = "";
     GUIStyle bannerStyle;
@@ -68,6 +103,7 @@ public class MatchManager : MonoBehaviour
     {
         Array.Clear(scores, 0, scores.Length);
         InputLocked = false;
+        ChaosActive = false;
     }
 
     public static int GetScore(int slot)
@@ -128,6 +164,7 @@ public class MatchManager : MonoBehaviour
         {
             Instance = null;
             InputLocked = false;
+            ChaosActive = false;
         }
     }
 
@@ -142,22 +179,76 @@ public class MatchManager : MonoBehaviour
             return;
         }
 
+        ChaosActive = false;
+        roundClock = 0f;
         Register(human, 0, false);
-        ApplyArt(human.gameObject, 0);
 
-        for (int slot = 1; slot <= botCount && slot < MaxSlots; slot++)
+        // menu główne: boty pojawiają się dopiero po wyborze trybu (liczbę wybiera gracz), a skiny po wyborze skina
+        bool menu = showMainMenu && MainMenu.ShouldShow;
+
+        if (menu)
         {
-            SpawnBot(human, slot);
+            MainMenu.Open();
+        }
+        else
+        {
+            SpawnBots(human, MainMenu.GameStarted ? MainMenu.BotCount : botCount);
+            ApplyLooks();
         }
 
-        if (playIntro)
+        if (menu || playIntro)
         {
-            StartCoroutine(IntroRoutine());
+            StartCoroutine(IntroRoutine(human, menu));
         }
     }
 
-    // READY na widoku całej areny, potem GO!: kamera się przybliża, a gracze i boty mogą ruszyć.
-    IEnumerator IntroRoutine()
+    void SpawnBots(PlayerHealth human, int count)
+    {
+        for (int slot = 1; slot <= count && slot < MaxSlots; slot++)
+        {
+            SpawnBot(human, slot);
+        }
+    }
+
+    // Wpisuje w każdą postać jej skin (GameArt) i odcień slotu bota. Wołane przy starcie i po wyborze w menu.
+    void ApplyLooks()
+    {
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant == null || combatant.health == null)
+            {
+                continue;
+            }
+
+            GameObject character = combatant.health.gameObject;
+            ApplyArt(character, combatant.slot);
+
+            if (!combatant.isBot)
+            {
+                continue;
+            }
+
+            // bot z własnymi grafikami (GameArt) wygląda jak jego zwierzak, bez nich dostaje odcień slotu
+            PlayerSprites botSprites = SpritesFor(combatant.slot);
+
+            if (botSprites == null || !botSprites.HasSprites)
+            {
+                Color tint = Color.Lerp(Color.white, slotColors[combatant.slot], botTintStrength);
+
+                foreach (SpriteRenderer sprite in character.GetComponentsInChildren<SpriteRenderer>())
+                {
+                    if (sprite.name != "Shadow")
+                    {
+                        sprite.color = tint;
+                    }
+                }
+            }
+        }
+    }
+
+    // Najpierw (jeśli jest menu główne) czeka na Play, potem READY na widoku całej areny, potem GO!:
+    // kamera się przybliża, a gracze i boty mogą ruszyć.
+    IEnumerator IntroRoutine(PlayerHealth human, bool waitForMenu)
     {
         InputLocked = true;
 
@@ -168,10 +259,34 @@ public class MatchManager : MonoBehaviour
             arenaCamera.SetMode(ArenaCamera.ViewMode.Whole, true);
         }
 
+        if (waitForMenu)
+        {
+            while (MainMenu.IsOpen)
+            {
+                yield return null;
+            }
+
+            SpawnBots(human, MainMenu.BotCount);
+            ApplyLooks();
+        }
+
+        if (!playIntro)
+        {
+            InputLocked = false;
+
+            if (arenaCamera != null)
+            {
+                arenaCamera.SetMode(ArenaCamera.ViewMode.Medium);
+            }
+
+            yield break;
+        }
+
         RoundIntro intro = RoundIntro.Create();
 
         // jedna klatka na ustawienie kamery i postaci
         yield return null;
+        GameAudio.Play(AudioEvent.RoundReady);
         yield return intro.Show("READY", readyColor, readySeconds);
 
         InputLocked = false;
@@ -181,6 +296,7 @@ public class MatchManager : MonoBehaviour
             arenaCamera.SetMode(ArenaCamera.ViewMode.Medium);
         }
 
+        GameAudio.Play(AudioEvent.RoundGo);
         yield return intro.Show("GO!", goColor, goSeconds);
         Destroy(intro.gameObject);
     }
@@ -205,24 +321,11 @@ public class MatchManager : MonoBehaviour
         PlayerMovement movement = copy.GetComponent<PlayerMovement>();
         movement.useKeyboard = false;
         movement.startCell = map.spawnPositions[slot % map.spawnPositions.Length];
-        movement.baseSpeed *= botSpeedMultiplier;
 
-        // bot z własnymi grafikami (GameArt) wygląda jak jego zwierzak, bez nich dostaje odcień slotu
-        ApplyArt(copy, slot);
-        PlayerSprites botSprites = SpritesFor(slot);
-
-        if (botSprites == null || !botSprites.HasSprites)
-        {
-            Color tint = Color.Lerp(Color.white, slotColors[slot], botTintStrength);
-
-            foreach (SpriteRenderer sprite in copy.GetComponentsInChildren<SpriteRenderer>())
-            {
-                if (sprite.name != "Shadow")
-                {
-                    sprite.color = tint;
-                }
-            }
-        }
+        // prędkość bota liczy PlayerStats (buty + mnożnik), żeby buty nie kasowały mnożnika
+        PlayerStats botStats = copy.GetComponent<PlayerStats>();
+        botStats.speedMultiplier = botSpeedMultiplier;
+        botStats.RefreshSpeed();
 
         BotBrain brain = copy.AddComponent<BotBrain>();
         brain.recklessness = botRecklessness;
@@ -233,6 +336,23 @@ public class MatchManager : MonoBehaviour
     void Update()
     {
         if (RoundOver)
+        {
+            return;
+        }
+
+        // zegar rundy liczy tylko czas gry (bez menu, READY i pauzy); po jego upływie włącza się CHAOS
+        if (!InputLocked)
+        {
+            roundClock += Time.deltaTime;
+
+            if (chaosEnabled && !ChaosActive && roundClock >= chaosAfterSeconds)
+            {
+                StartChaos();
+            }
+        }
+
+        // tuż po wybuchu atomówki czekamy, aż wszystkie ofiary zginą
+        if (Time.time < nukeGraceUntil)
         {
             return;
         }
@@ -270,8 +390,30 @@ public class MatchManager : MonoBehaviour
 
         if (alive <= 1)
         {
-            EndRound(last, true);
+            Combatant winner = last;
+
+            // atomówka: kto ją zrzucił i zabił wszystkich, wygrywa nawet jeśli sam zginął
+            if (alive == 0 && nukeOwner >= 0 && nukeOwner < Slots.Length && Slots[nukeOwner] != null && Time.time < nukeWindowUntil)
+            {
+                winner = Slots[nukeOwner];
+            }
+
+            EndRound(winner, true);
         }
+    }
+
+    void StartChaos()
+    {
+        ChaosActive = true;
+        GameAudio.Play(AudioEvent.ChaosStart);
+        StartCoroutine(ChaosBanner());
+    }
+
+    IEnumerator ChaosBanner()
+    {
+        RoundIntro banner = RoundIntro.Create();
+        yield return banner.Show("DOUBLE BUFFS,\nCHAOS!", chaosColor, 2.6f, 150f);
+        Destroy(banner.gameObject);
     }
 
     void EndRound(Combatant winner, bool scorePoint)
@@ -283,6 +425,7 @@ public class MatchManager : MonoBehaviour
             scores[winner.slot]++;
         }
 
+        GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
         banner = winner == null ? (scorePoint ? "DRAW" : "") : NameOf(winner) + " WINS THE ROUND";
         Invoke(nameof(Restart), restartDelay);
     }

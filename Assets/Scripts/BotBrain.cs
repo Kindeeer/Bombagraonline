@@ -173,8 +173,8 @@ public class BotBrain : MonoBehaviour
             return;
         }
 
-        // 2. Szukam drogi do celów
-        Search(cell, !reckless);
+        // 2. Szukam drogi do celów (zawsze omijam pola zagrożone wybuchem)
+        Search(cell, true);
 
         // 2b. Przedmiot specjalny ze slotu Buff (rakieta, młotek)
         if (TrySpecial(cell))
@@ -189,7 +189,8 @@ public class BotBrain : MonoBehaviour
             bool enemyInLine = EnemyInLine(cell, stats.blastRange);
             bool wantsBomb = enemyInLine || (HasAdjacentBlock(cell) && !EnemyReachable());
 
-            if (wantsBomb && (CanEscapeAfterBomb(cell) || (reckless && enemyInLine)) && bombs.PlaceBomb())
+            // bomba tylko wtedy, gdy bot na pewno zdąży uciec: nastrój kamikadze nie pozwala już ryzykować własnej śmierci
+            if (wantsBomb && CanEscapeAfterBomb(cell) && bombs.PlaceBomb())
             {
                 bombCooldownUntil = Time.time + bombCooldown;
                 DangerMap.Invalidate();
@@ -398,6 +399,20 @@ public class BotBrain : MonoBehaviour
             return false;
         }
 
+        // atomówka: bot zrzuca ją na przeciwnika, który stoi dość daleko, żeby wybuch nie trafił też bota
+        if (pickups.HeldItem.special == SpecialItem.Nuke)
+        {
+            Vector2Int nukeTarget = NukeTarget(cell);
+
+            if (nukeTarget.x < 0)
+            {
+                return false;
+            }
+
+            specialCooldownUntil = Time.time + 1.5f;
+            return pickups.LaunchNuke(nukeTarget);
+        }
+
         Vector2Int direction = pickups.HeldItem.special == SpecialItem.Rocket ? RocketTarget(cell) : HammerTarget(cell);
 
         if (direction == Vector2Int.zero)
@@ -413,6 +428,27 @@ public class BotBrain : MonoBehaviour
 
         specialCooldownUntil = Time.time + (pickups.UseSpecial() ? 0.8f : 1f);
         return true;
+    }
+
+    // Pole najbliższego przeciwnika, na które da się zrzucić atomówkę bez trafienia siebie (x < 0 = brak celu).
+    Vector2Int NukeTarget(Vector2Int cell)
+    {
+        Vector2Int best = new Vector2Int(-1, -1);
+        int bestDistance = int.MaxValue;
+
+        for (int i = 0; i < enemyCount; i++)
+        {
+            Vector2Int enemy = FromIndex(enemyIndices[i]);
+            int distance = Mathf.Max(Mathf.Abs(enemy.x - cell.x), Mathf.Abs(enemy.y - cell.y));
+
+            if (distance > Nuke.BlastRadius + 1 && distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = enemy;
+            }
+        }
+
+        return best;
     }
 
     // Kierunek, w którym stoi przeciwnik w linii rakiety (zero = brak celu).
@@ -540,7 +576,10 @@ public class BotBrain : MonoBehaviour
             extraDanger[Index(flame)] = true;
         }
 
-        int maxSteps = Mathf.Max(2, Mathf.FloorToInt(movement.baseSpeed * stats.fuseTime * 0.7f));
+        // ile pól bot zdąży przejść przed wybuchem: zapas na reakcję (0,6 s) i zakręty (80% prędkości);
+        // na wolnym polu (miód) prędkość jest o połowę mniejsza
+        float speed = movement.baseSpeed * (GridMap.Instance.GetTileType(cell) == TileType.HoneyPuddle ? 0.5f : 1f);
+        int maxSteps = Mathf.Max(1, Mathf.FloorToInt((stats.fuseTime - 0.6f) * speed * 0.8f));
 
         Array.Fill(escapeDistance, -1);
 

@@ -634,6 +634,7 @@ public class GridMap : MonoBehaviour
                 blockLastHitBy[i] = null;
                 grid[i] = TileType.Empty;
                 UpdateTileVisual(cell.x, cell.y);
+                GameAudio.Play(AudioEvent.BlockBreak, GridToWorld(cell));
                 BlockDestroyed?.Invoke(cell, current);
                 break;
             case TileType.HeavyCookie:

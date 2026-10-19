@@ -64,7 +64,7 @@ public class GameArtEditor : Editor
         DrawDefaultInspector();
         EditorGUILayout.Space();
 
-        showTools = EditorGUILayout.Foldout(showTools, "Narzędzia (import grafik, plansza, układy)", true);
+        showTools = EditorGUILayout.Foldout(showTools, "Narzędzia (import grafik, HUD)", true);
 
         if (!showTools)
         {
@@ -78,43 +78,19 @@ public class GameArtEditor : Editor
             SpriteImportTool.Sharpen();
         }
 
-        EditorGUILayout.LabelField("Plansza", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("HUD", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("Maluj arenę (ramka, filary, podłoga) dla rozmiaru z GridMap"))
+        EditorGUILayout.HelpBox(
+            "Tworzy w Hierarchii nakładkę HUD jak w Bomb It: tło paneli bocznych i ramkę wokół okna z planszą (zwykłe obiekty Canvas). " +
+            "Kamera w grze rysuje wtedy tylko okno między panelami, więc plansza nie prześwituje pod przyciskami. " +
+            "Zrób to raz i zapisz scenę (Ctrl+S). Wygląd ustawiasz w sekcji Ramka i panele HUD powyżej.",
+            MessageType.None);
+
+        if (GUILayout.Button("Zbuduj ramkę HUD w scenie (Canvas w Hierarchii)"))
         {
-            ArenaSetup.GenerateArena();
+            HudFrameBuilder.BuildInScene();
         }
 
-        EditorGUILayout.LabelField("Układy", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("Przypisz układy z Assets/Layouts do GridMap"))
-        {
-            LayoutTools.AssignAll();
-        }
-
-        if (GUILayout.Button("Generuj losowe układy"))
-        {
-            LayoutTools.GenerateRandomLayouts();
-        }
-
-        if (GUILayout.Button("Przykładowe układy (tylko siatka 15 x 11)"))
-        {
-            LayoutTools.CreateSampleLayouts();
-        }
-
-        if (GUILayout.Button("Nowy pusty układ do malowania"))
-        {
-            LayoutTools.NewLayout();
-        }
-
-        if (GUILayout.Button("Odbij układ (kopiuje lewą górną ćwiartkę)"))
-        {
-            LayoutTools.MirrorLayout();
-        }
-
-        if (GUILayout.Button("Sprawdź układ (symetria, dojście do graczy)"))
-        {
-            LayoutTools.ValidateLayout();
-        }
     }
 }

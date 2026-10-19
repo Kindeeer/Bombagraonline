@@ -14,20 +14,51 @@ public class PlayerStats : MonoBehaviour
     public float minFuseTime = 1f;
     public float maxFuseTime = 5f;
 
-    [Header("Szybkość (power-up)")]
-    public float speedStep = 0.4f;
+    [Header("Szybkość (buty)")]
+    [Tooltip("Prędkość chodzenia bez żadnych butów (pola na sekundę). To jest wartość startowa każdej postaci.")]
+    public float startSpeed = 1.7f;
+    [Tooltip("O ile każdy but zwiększa prędkość (pola na sekundę). Buty się kumulują.")]
+    public float bootBonus = 0.5f;
+    [Tooltip("Najwolniejsza możliwa prędkość (po klątwach).")]
+    public float minSpeed = 1f;
+    [Tooltip("Ile butów można mieć naraz.")]
     public int speedUpgradeLimit = 5;
     [Tooltip("Ile stopni można stracić przez przedmioty negatywne.")]
     public int speedDowngradeLimit = 2;
+    [Tooltip("Mnożnik prędkości (używają go boty, żeby chodziły szybciej albo wolniej od gracza).")]
+    public float speedMultiplier = 1f;
 
     int speedUpgrades;
+    PlayerMovement movement;
+
+    // Ile butów ma postać teraz (z butami czasowymi, np. Turbo). Używa tego HUD.
+    public int SpeedLevel => speedUpgrades;
 
     void Awake()
     {
+        movement = GetComponent<PlayerMovement>();
+
         // moduł przedmiotów dokładamy sam, żeby nie trzeba było nic dodawać w inspektorze
         if (GetComponent<PlayerPickups>() == null)
         {
             gameObject.AddComponent<PlayerPickups>();
+        }
+
+        // prędkość startowa jest ustawiona tutaj, a nie w PlayerMovement, więc strojenie robi się w jednym miejscu
+        RefreshSpeed();
+    }
+
+    // Przelicza prędkość chodzenia z liczby butów i mnożnika.
+    public void RefreshSpeed()
+    {
+        if (movement == null)
+        {
+            movement = GetComponent<PlayerMovement>();
+        }
+
+        if (movement != null)
+        {
+            movement.baseSpeed = Mathf.Max(minSpeed, startSpeed + speedUpgrades * bootBonus) * speedMultiplier;
         }
     }
 
@@ -35,18 +66,11 @@ public class PlayerStats : MonoBehaviour
     // Każda metoda zwraca faktyczną zmianę po limitach, żeby efekt czasowy dało się dokładnie cofnąć.
     public int AddSpeed(int steps = 1)
     {
-        PlayerMovement movement = GetComponent<PlayerMovement>();
-
-        if (movement == null)
-        {
-            return 0;
-        }
-
         int target = Mathf.Clamp(speedUpgrades + steps, -speedDowngradeLimit, speedUpgradeLimit);
         int applied = target - speedUpgrades;
 
-        movement.baseSpeed += applied * speedStep;
         speedUpgrades = target;
+        RefreshSpeed();
         return applied;
     }
 

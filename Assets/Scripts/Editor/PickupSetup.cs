@@ -54,7 +54,7 @@ public static class PickupSetup
                 icon = PickupIcon.Shield, mode = PickupMode.Permanent, effect = PickupEffect.Shield, weightBlocks = 12, weightFountain = 20 },
             new Spec { file = "Star", displayName = "Gwiazda", description = "Przez 5 sekund wybuchy Ci nie szkodzą.",
                 icon = PickupIcon.Star, mode = PickupMode.Timed, duration = 5f, effect = PickupEffect.Invincibility, weightBlocks = 6, weightFountain = 20 },
-            new Spec { file = "Kick", displayName = "Kopanie bomb", description = "Idź w bombę, żeby ją odkopnąć. Jedzie, aż w coś uderzy.",
+            new Spec { file = "Kick", displayName = "Kopanie bomb", description = "Idź w bombę, żeby ją kopnąć. Jedno kopnięcie, kumulują się (do 3).",
                 icon = PickupIcon.Boot, mode = PickupMode.Permanent, effect = PickupEffect.Kick, weightBlocks = 12, weightFountain = 20 },
             new Spec { file = "MegaBlast", displayName = "Mega wybuch", description = "Następna bomba ma zasięg o 3 większy. Jedno użycie.",
                 icon = PickupIcon.MegaBomb, mode = PickupMode.NextBomb, extraRange = 3, weightBlocks = 10, weightFountain = 20 },
@@ -68,6 +68,8 @@ public static class PickupSetup
                 icon = PickupIcon.Swirl, mode = PickupMode.NextBomb, special = SpecialItem.Teleport, weightBlocks = 8, weightFountain = 20 },
             new Spec { file = "CurseDizzy", displayName = "Zawroty głowy", description = "Przez 8 sekund sterowanie jest odwrócone.",
                 icon = PickupIcon.Dizzy, mode = PickupMode.Timed, duration = 8f, effect = PickupEffect.ReverseControls, weightBlocks = 6, weightFountain = 10, tint = BadTint },
+            new Spec { file = "Nuke", displayName = "Atomówka", description = "Giga rzadka. Stoisz w miejscu i klikasz, gdzie ją zrzucić. Ogromny wybuch.",
+                icon = PickupIcon.Nuke, mode = PickupMode.NextBomb, special = SpecialItem.Nuke, weightBlocks = 1, weightFountain = 2 },
             new Spec { file = "CurseAutoBombs", displayName = "Biegunka bomb", description = "Przez 6 sekund sam zostawiasz bomby.",
                 icon = PickupIcon.Skull, mode = PickupMode.Timed, duration = 6f, effect = PickupEffect.AutoBombs, weightBlocks = 6, weightFountain = 10, tint = BadTint }
         };

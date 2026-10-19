@@ -26,6 +26,7 @@ public static class Emotes
 
     public static void Send(int slot, Emote emote)
     {
+        GameAudio.Play(AudioEvent.Emote);
         Sent?.Invoke(slot, emote);
     }
 

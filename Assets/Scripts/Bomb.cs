@@ -51,6 +51,7 @@ public class Bomb : MonoBehaviour
         transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * sortOffsetY;
         GridMap.Instance.SetBomb(cell, true);
         BombRegistry.Register(this);
+        GameAudio.Play(AudioEvent.BombPlace, transform.position);
     }
 
     void Update()
@@ -83,19 +84,29 @@ public class Bomb : MonoBehaviour
     float slideProgress;
 
     // Odkopuje bombę w podanym kierunku. Jedzie pole po polu, aż napotka przeszkodę, postać albo ogień.
-    public void Kick(Vector2Int direction)
+    // Zwraca true, gdy bomba ruszyła (przy zablokowanej drodze nic się nie dzieje i kopnięcie się nie liczy).
+    public bool Kick(Vector2Int direction)
     {
         if (hasExploded || direction == Vector2Int.zero)
         {
-            return;
+            return false;
         }
 
         slideDirection = direction;
+
+        bool wasSliding = sliding;
 
         if (!sliding)
         {
             TryStartSlideStep();
         }
+
+        if (sliding && !wasSliding)
+        {
+            GameAudio.Play(AudioEvent.BombKick, transform.position);
+        }
+
+        return sliding;
     }
 
     void TryStartSlideStep()
@@ -196,6 +207,7 @@ public class Bomb : MonoBehaviour
     void Explode()
     {
         hasExploded = true;
+        GameAudio.Play(AudioEvent.BombExplode, transform.position);
 
         BombRegistry.Unregister(this);
         GridMap.Instance.SetBomb(Cell, false);

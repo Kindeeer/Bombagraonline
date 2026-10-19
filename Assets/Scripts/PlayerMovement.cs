@@ -21,9 +21,6 @@ public class PlayerMovement : MonoBehaviour
     public bool useKeyboard = true;
     [HideInInspector] public Vector2Int aiInput;
 
-    [Tooltip("Gracze i boty nie mogą wchodzić jeden w drugiego (wyjść z nałożenia można).")]
-    public bool playersBlockEachOther = true;
-
     const float HalfSize = 0.5f;
 
     [Header("Skręcanie")]
@@ -36,6 +33,9 @@ public class PlayerMovement : MonoBehaviour
 
     // Tryb debug (menu pod TAB): postać przechodzi przez bloki, ściany, bomby i innych graczy, ale zostaje w obrębie planszy.
     [HideInInspector] public bool noclip;
+
+    // Postać stoi w miejscu (np. celuje atomówką), ale nadal żyje i da się ją trafić.
+    [HideInInspector] public bool Frozen;
 
     public Facing Facing { get; private set; } = Facing.Down;
     public bool IsMoving { get; private set; }
@@ -54,8 +54,8 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        // na starcie rundy (do napisu GO!) postać stoi w miejscu
-        if (MatchManager.InputLocked)
+        // na starcie rundy (do napisu GO!) i podczas celowania atomówką postać stoi w miejscu
+        if (MatchManager.InputLocked || Frozen)
         {
             IsMoving = false;
             return;
@@ -103,6 +103,16 @@ public class PlayerMovement : MonoBehaviour
             direction = newestIsHorizontal ? new Vector2Int(input.x, 0) : new Vector2Int(0, input.y);
         }
 
+        // zabezpieczenie: środek postaci nigdy nie wchodzi w pole z bombą, na którym wcześniej nie stał
+        // (łapie wszystkie dziwne przypadki, np. ześlizg w bok na rogu)
+        Vector2Int newCell = GridMap.Instance.WorldToGrid(position);
+
+        if (!noclip && BombRegistry.HasBomb(newCell) && !Overlaps(startPosition, newCell))
+        {
+            position = startPosition;
+            moved = false;
+        }
+
         Facing = ToFacing(direction);
         IsMoving = moved;
         transform.position = new Vector3(position.x, position.y, transform.position.z);
@@ -134,7 +144,11 @@ public class PlayerMovement : MonoBehaviour
 
         if (BombRegistry.TryGet(target, out Bomb bomb))
         {
-            bomb.Kick(direction);
+            // udane kopnięcie zużywa jeden ładunek przedmiotu
+            if (bomb.Kick(direction))
+            {
+                pickups.ConsumeKick();
+            }
         }
     }
 
@@ -227,12 +241,26 @@ public class PlayerMovement : MonoBehaviour
 
             if (Mathf.Abs(lane - lateral) > Aligned)
             {
-                position = horizontal ? new Vector2(position.x, lateral) : new Vector2(lateral, position.y);
+                // ześlizg w bok też sprawdza kolizje, żeby nie wjechać w bombę ani ścianę
+                Vector2 sliding = horizontal ? new Vector2(position.x, lateral) : new Vector2(lateral, position.y);
+
+                if (!Collides(sliding, position))
+                {
+                    position = sliding;
+                }
+
                 return;
             }
         }
 
-        position = horizontal ? new Vector2(position.x, lane) : new Vector2(lane, position.y);
+        Vector2 aligned = horizontal ? new Vector2(position.x, lane) : new Vector2(lane, position.y);
+
+        if (Collides(aligned, position))
+        {
+            return;
+        }
+
+        position = aligned;
 
         if (distance > 0f)
         {
@@ -300,45 +328,8 @@ public class PlayerMovement : MonoBehaviour
         return free > 0.00001f;
     }
 
-    // Inny żywy gracz lub bot blokuje wejście w jego ciało, ale kto już na nim stoi, może się odsunąć
-    // (tak samo jak przy bombie). Margines 0.98 sprawia, że postacie stojące obok siebie się nie zakleszczają.
-    bool BlockedByPlayer(Vector2 position, Vector2 current)
-    {
-        MatchManager match = MatchManager.Instance;
-
-        if (!playersBlockEachOther || match == null)
-        {
-            return false;
-        }
-
-        foreach (Combatant other in match.Slots)
-        {
-            if (other == null || !other.IsAlive || other.health.transform == transform)
-            {
-                continue;
-            }
-
-            Vector2 otherPosition = other.health.transform.position;
-
-            bool overlapsNow = Mathf.Abs(position.x - otherPosition.x) < 0.98f && Mathf.Abs(position.y - otherPosition.y) < 0.98f;
-            bool overlappedBefore = Mathf.Abs(current.x - otherPosition.x) < 0.98f && Mathf.Abs(current.y - otherPosition.y) < 0.98f;
-
-            if (overlapsNow && !overlappedBefore)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     bool Collides(Vector2 position, Vector2 current)
     {
-        if (BlockedByPlayer(position, current))
-        {
-            return true;
-        }
-
         GetCellRange(position, out int minX, out int maxX, out int minY, out int maxY);
 
         for (int x = minX; x <= maxX; x++)
@@ -357,9 +348,12 @@ public class PlayerMovement : MonoBehaviour
         return false;
     }
 
-    // Bomba blokuje ruch. Wyjątek: kto jeszcze stoi na bombie (właśnie ją postawił), może z niej zejść,
-    // ale tylko "na zewnątrz": ruch, który zwiększałby nachodzenie na bombę (np. powrót przez nią), jest zablokowany.
-    // Dzięki temu nie da się przejść przez bombę, gdy postać zdąży zejść tylko do połowy.
+    // Bomba blokuje ruch. Wyjątki:
+    // - kto stoi na bombie środkiem (właśnie ją postawił), rusza się swobodnie i może zejść w dowolną stronę,
+    // - kto zszedł z niej tylko częściowo (środek już poza polem), może iść wyłącznie "na zewnątrz": ruch, który
+    //   zwiększałby nachodzenie na bombę (np. powrót przez nią), jest zablokowany.
+    // Dzięki temu nie da się przejść przez cudzą ani własną bombę od drugiej strony, a postać między dwiema bombami
+    // zawsze może wyjść w stronę, w którą nie ma bomby.
     static bool BombBlocks(Vector2Int cell, Vector2 position, Vector2 current)
     {
         if (!BombRegistry.HasBomb(cell))
@@ -370,6 +364,11 @@ public class PlayerMovement : MonoBehaviour
         if (!Overlaps(current, cell))
         {
             return true;
+        }
+
+        if (GridMap.Instance.WorldToGrid(current) == cell)
+        {
+            return false;
         }
 
         return Penetration(position, cell) > Penetration(current, cell) + 0.0001f;
@@ -393,13 +392,13 @@ public class PlayerMovement : MonoBehaviour
         return BombRegistry.HasBomb(cell) && !Overlaps(current, cell);
     }
 
-    static bool Overlaps(Vector2 position, Vector2Int cell)
+    public static bool Overlaps(Vector2 position, Vector2Int cell)
     {
         GetCellRange(position, out int minX, out int maxX, out int minY, out int maxY);
         return cell.x >= minX && cell.x <= maxX && cell.y >= minY && cell.y <= maxY;
     }
 
-    static void GetCellRange(Vector2 position, out int minX, out int maxX, out int minY, out int maxY)
+    public static void GetCellRange(Vector2 position, out int minX, out int maxX, out int minY, out int maxY)
     {
         minX = Mathf.FloorToInt(position.x - HalfSize + Edge);
         maxX = Mathf.FloorToInt(position.x + HalfSize - Edge);
