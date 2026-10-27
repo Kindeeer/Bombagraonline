@@ -72,6 +72,13 @@ public class EmotePicker : MonoBehaviour
         if (popup != null)
         {
             popup.SetActive(!popup.activeSelf);
+
+            // okienko emotek ma leżeć nad pozostałymi elementami panelu (np. małymi slotami Tarcza i Buty),
+            // żeby nic nie zasłaniało napisów pod emotkami
+            if (popup.activeSelf)
+            {
+                popup.transform.SetAsLastSibling();
+            }
         }
     }
 

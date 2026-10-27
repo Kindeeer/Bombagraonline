@@ -255,6 +255,46 @@ public class MainMenu : MonoBehaviour
             }
         }
 
+        // wiersze ustawień, przełączniki ON/OFF i panel pauzy
+        foreach (Transform t in GetComponentsInChildren<Transform>(true))
+        {
+            Image image = t.GetComponent<Image>();
+
+            if (image == null)
+            {
+                continue;
+            }
+
+            if (t.name.Contains("Row_") && art.menuRow != null)
+            {
+                image.sprite = art.menuRow;
+                image.type = Image.Type.Sliced;
+            }
+            else if (t.name == "Switch" && art.menuSwitchTrack != null)
+            {
+                image.type = Image.Type.Sliced;
+                ButtonFx fx = t.GetComponent<ButtonFx>();
+
+                if (fx != null)
+                {
+                    fx.SetSprites(art.menuSwitchTrack, null, null);
+                }
+                else
+                {
+                    image.sprite = art.menuSwitchTrack;
+                }
+            }
+            else if (t.name == "Knob" && art.menuSwitchKnob != null)
+            {
+                image.sprite = art.menuSwitchKnob;
+            }
+            else if (t.name == "PausePanel" && art.menuPausePanel != null)
+            {
+                image.sprite = art.menuPausePanel;
+                image.type = Image.Type.Sliced;
+            }
+        }
+
         if (art.menuButton != null)
         {
             foreach (Button button in GetComponentsInChildren<Button>(true))

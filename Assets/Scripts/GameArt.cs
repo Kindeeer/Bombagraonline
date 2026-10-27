@@ -168,6 +168,14 @@ public class GameArt : MonoBehaviour
     public Sprite menuCardHover;
     [Tooltip("Karta skina po kliknięciu. Puste = ciemniejsza nakładka z kodu.")]
     public Sprite menuCardPressed;
+    [Tooltip("Tło wiersza w Settings (Sound, Music), rozciągane (9-slice).")]
+    public Sprite menuRow;
+    [Tooltip("Tor przełącznika ON/OFF (rozciągany, 9-slice). Gra go barwi: szary = OFF, zielony = ON, więc rysuj go w bieli.")]
+    public Sprite menuSwitchTrack;
+    [Tooltip("Gałka przełącznika ON/OFF (koło).")]
+    public Sprite menuSwitchKnob;
+    [Tooltip("Panel pauzy na środku ekranu (rozciągany, 9-slice).")]
+    public Sprite menuPausePanel;
 
     [Header("Interfejs (HUD)")]
     [Tooltip("Tło paneli i przycisków (rozciągane, 9-slice).")]
