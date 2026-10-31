@@ -415,6 +415,32 @@ public class LobbyController : MonoBehaviour
             int skinIndex = Mathf.Max(0, Array.FindIndex(art.players, p => p.label == player.skin));
             PlayerSprites look = art.SkinLook(skinIndex, player.chroma);
             avatar.look = look;
+
+            if (look != null && avatar.visual != null)
+            {
+                WorldChromaFx emitter = avatar.visual.GetComponent<WorldChromaFx>();
+                EnchantGlint glint = avatar.visual.GetComponent<EnchantGlint>();
+
+                if (emitter == null && look.fx.HasParticles)
+                {
+                    emitter = avatar.visual.gameObject.AddComponent<WorldChromaFx>();
+                }
+
+                if (glint == null && look.fx.glint)
+                {
+                    glint = avatar.visual.gameObject.AddComponent<EnchantGlint>();
+                }
+
+                if (emitter != null)
+                {
+                    emitter.Configure(avatar.renderer, look.fx);
+                }
+
+                if (glint != null)
+                {
+                    glint.Configure(avatar.renderer, look.fx);
+                }
+            }
             avatar.nick.GetComponent<TextMeshProUGUI>().text = player.nick;
             spot++;
         }

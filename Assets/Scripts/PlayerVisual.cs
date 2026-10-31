@@ -103,6 +103,35 @@ public class PlayerVisual : MonoBehaviour
         {
             body.color = has ? sprites.tint : defaultColor;
         }
+
+        ApplyEffect(has ? sprites.fx : default);
+    }
+
+    // Efekt wizualny chromy (ogień, błyski, śnieg...) wokół postaci. Bez efektu emiter jest wyłączony.
+    void ApplyEffect(ChromaFxLook look)
+    {
+        WorldChromaFx emitter = GetComponent<WorldChromaFx>();
+        EnchantGlint glint = GetComponent<EnchantGlint>();
+
+        if (emitter == null && look.HasParticles)
+        {
+            emitter = gameObject.AddComponent<WorldChromaFx>();
+        }
+
+        if (glint == null && look.glint)
+        {
+            glint = gameObject.AddComponent<EnchantGlint>();
+        }
+
+        if (emitter != null)
+        {
+            emitter.Configure(body, look);
+        }
+
+        if (glint != null)
+        {
+            glint.Configure(body, look);
+        }
     }
 
     void Update()

@@ -206,7 +206,7 @@ public partial class MainMenu : MonoBehaviour
 
         // język: flagi w rogu i tłumaczenie napisów ze sceny (napisy ustawiane z kodu są pominięte)
         BuildLanguagePickers();
-        Loc.BindTexts(transform, editTitle);
+        Loc.BindTexts(transform, editTitle, chestTitleText);
     }
 
     // Menu zbudowane w Hierarchii mogło mieć uszkodzony efekt przycisków (po przeniesieniu klasy ButtonFx do osobnego pliku).
@@ -340,7 +340,7 @@ public partial class MainMenu : MonoBehaviour
         Wire("Button_OpenChest", OpenChestClicked);
         Wire("Button_FreeCoins", () =>
         {
-            PlayerWallet.AddCoins(100);
+            PlayerWallet.AddCoins(500);
             GameAudio.Play(AudioEvent.CoinGain);
             RefreshShop();
         });

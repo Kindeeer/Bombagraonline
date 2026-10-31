@@ -63,6 +63,7 @@ public partial class MainMenu
     TextMeshProUGUI shopCoinText;
     TextMeshProUGUI collectionText;
     TextMeshProUGUI chancesText;
+    TextMeshProUGUI chestTitleText;
     TextMeshProUGUI hintText;
     Image openChestImage;
     TextMeshProUGUI openChestLabel;
@@ -161,6 +162,30 @@ public partial class MainMenu
         openChestLabel = open.GetComponentInChildren<TextMeshProUGUI>();
         shopChest = ViewOf(shop.Find("Chest"));
 
+        // tytuł karty (nazwa wybranej skrzynki), przyciski zmiany skrzynki i przycisk testowych monet
+        Transform info = shop.Find("Info");
+        chestTitleText = info != null ? info.GetComponentInChildren<TextMeshProUGUI>(true) : null;
+
+        if (chestTitleText != null)
+        {
+            chestTitleText.enableAutoSizing = true;
+            chestTitleText.fontSizeMin = 28f;
+            chestTitleText.fontSizeMax = 52f;
+        }
+
+        if (shop.Find("ChestPrev") == null)
+        {
+            CreateChestArrow(shop, "ChestPrev", "<", 0.085f, -1);
+            CreateChestArrow(shop, "ChestNext", ">", 0.435f, 1);
+        }
+
+        Transform freeButton = shop.Find("Button_FreeCoins");
+
+        if (freeButton != null)
+        {
+            SetButtonText(freeButton.GetComponent<Button>(), "+500 (TEST)");
+        }
+
         // teksty ustawiane z kodu przy zmianie języka: szanse (zawierają %) i podpowiedź o monetach
         chancesText = null;
         hintText = null;
@@ -194,7 +219,7 @@ public partial class MainMenu
         editTitle = edit.Find("Title").GetComponent<TextMeshProUGUI>();
         editPreview = edit.Find("Preview/Image").GetComponent<Image>();
         editRarity = edit.Find("Preview/RarityText").GetComponent<TextMeshProUGUI>();
-        editRow = (RectTransform)edit.Find("Chromas");
+        editRow = EnsureEditGrid((RectTransform)edit.Find("Chromas"));
 
         Transform found = FindDeep(transform, "ChestOverlay");
         overlay = ReadOverlay((RectTransform)found);
@@ -350,7 +375,7 @@ public partial class MainMenu
         TextMeshProUGUI title = NewText(info.transform, "SKRZYNKA Z CHROMAMI", 52f, MenuBuilder.DarkText, TextAlignmentOptions.Center, FontStyles.Bold);
         Anchor(title.rectTransform, 0.04f, 0.82f, 0.96f, 0.97f);
 
-        TextMeshProUGUI chances = NewText(info.transform, ChanceLines(), 38f, MenuBuilder.DarkText, TextAlignmentOptions.Center);
+        TextMeshProUGUI chances = NewText(info.transform, ChanceLines(Chests.Selected, GameArt.Instance), 38f, MenuBuilder.DarkText, TextAlignmentOptions.Center);
         Anchor(chances.rectTransform, 0.04f, 0.40f, 0.96f, 0.82f);
         chances.richText = true;
         chances.name = "ChanceText";
@@ -382,27 +407,86 @@ public partial class MainMenu
         MenuBuilder.AddBackButton(page);
     }
 
-    // Szanse z wag rzadkości, w jednym tekście z kolorami.
-    static string ChanceLines()
+    // Opis skrzynki i szanse na kolejne rzadkości (z wag i liczby chrom w jej puli), w jednym tekście z kolorami.
+    static string ChanceLines(ChestType chest, GameArt art)
     {
         ChromaRarity[] order = { ChromaRarity.Common, ChromaRarity.Rare, ChromaRarity.Epic, ChromaRarity.Legendary };
-        int total = 0;
+        float[] weights = new float[4];
+        float total = 0f;
 
-        foreach (ChromaRarity rarity in order)
+        if (art != null)
         {
-            total += SkinChroma.RarityWeight(rarity);
+            for (int skin = 0; skin < art.SkinCount; skin++)
+            {
+                foreach (SkinChroma chroma in art.players[skin].ChromaList)
+                {
+                    if (chest.Accepts(chroma))
+                    {
+                        weights[(int)chroma.rarity] += chest.Weight(chroma.rarity);
+                        total += chest.Weight(chroma.rarity);
+                    }
+                }
+            }
         }
 
-        System.Text.StringBuilder text = new System.Text.StringBuilder(Loc.T("shop.rolls") + "\n");
+        System.Text.StringBuilder text = new System.Text.StringBuilder(chest.Info + "\n");
 
         foreach (ChromaRarity rarity in order)
         {
+            if (weights[(int)rarity] <= 0f || total <= 0f)
+            {
+                continue;
+            }
+
+            float percent = 100f * weights[(int)rarity] / total;
             string hex = ColorUtility.ToHtmlStringRGB(SkinChroma.RarityColor(rarity) * 0.78f);
-            int percent = Mathf.RoundToInt(100f * SkinChroma.RarityWeight(rarity) / total);
-            text.Append("\n<b><color=#").Append(hex).Append('>').Append(SkinChroma.RarityName(rarity)).Append("</color></b>  ").Append(percent).Append('%');
+            text.Append("\n<b><color=#").Append(hex).Append('>').Append(SkinChroma.RarityName(rarity)).Append("</color></b>  ")
+                .Append(percent >= 10f ? Mathf.RoundToInt(percent).ToString() : percent.ToString("0.#")).Append('%');
         }
 
         return text.ToString();
+    }
+
+    void CreateChestArrow(RectTransform page, string objectName, string text, float x, int direction)
+    {
+        Button arrow = NewButton(page, text, MenuBuilder.PlumColor, null, 90f);
+        arrow.name = objectName;
+        RectTransform rect = (RectTransform)arrow.transform;
+        rect.anchorMin = rect.anchorMax = new Vector2(x, 0.47f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(110f, 160f);
+        WireClick(arrow, () => ChangeChest(direction), true);
+    }
+
+    void ChangeChest(int direction)
+    {
+        if (chestBusy)
+        {
+            return;
+        }
+
+        Chests.SelectedIndex += direction;
+        RefreshShop();
+    }
+
+    // Koloruje skrzynkę według rodzaju (korpus, wieczko i okucia), po nazwach obiektów.
+    static void TintChest(ChestView view, ChestType chest)
+    {
+        foreach (Image image in view.root.GetComponentsInChildren<Image>(true))
+        {
+            if (image.name == "Body")
+            {
+                image.color = chest.body;
+            }
+            else if (image.name == "Lid")
+            {
+                image.color = chest.lid;
+            }
+            else if (image.name == "Plate" || image.name.StartsWith("Band"))
+            {
+                image.color = chest.accent;
+            }
+        }
     }
 
     static void AddCoinIcon(Transform parent, float xMin, float yMin, float xMax, float yMax)
@@ -459,17 +543,28 @@ public partial class MainMenu
     void RefreshShop()
     {
         GameArt art = GameArt.Instance;
-        int total = art != null ? PlayerWallet.TotalCount(art) : 0;
-        int missing = art != null ? PlayerWallet.MissingCount(art) : 0;
+        ChestType chest = Chests.Selected;
+        int total = art != null ? PlayerWallet.TotalCount(art, chest) : 0;
+        int missing = art != null ? PlayerWallet.MissingCount(art, chest) : 0;
         bool all = missing == 0;
 
         shopCoinText.text = PlayerWallet.Coins.ToString();
         collectionText.text = Loc.F("shop.collected", total - missing, total);
-        openChestLabel.text = all ? Loc.T("shop.all") : Loc.F("shop.open", PlayerWallet.ChestPrice);
+        openChestLabel.text = all ? Loc.T("shop.all") : Loc.F("shop.open", chest.price);
+
+        if (chestTitleText != null)
+        {
+            chestTitleText.text = Loc.P("SKRZYNKA ", "CHEST ") + chest.Name;
+        }
+
+        TintChest(shopChest, chest);
 
         if (chancesText != null)
         {
-            chancesText.text = ChanceLines();
+            chancesText.enableAutoSizing = true;
+            chancesText.fontSizeMin = 22f;
+            chancesText.fontSizeMax = 38f;
+            chancesText.text = ChanceLines(chest, art);
         }
 
         if (hintText != null)
@@ -477,7 +572,7 @@ public partial class MainMenu
             hintText.text = Loc.F("shop.hint", PlayerWallet.WinReward);
         }
 
-        openChestImage.color = !all && PlayerWallet.Coins >= PlayerWallet.ChestPrice ? MenuBuilder.OrangeColor : MenuBuilder.DisabledColor;
+        openChestImage.color = !all && PlayerWallet.Coins >= chest.price ? MenuBuilder.OrangeColor : MenuBuilder.DisabledColor;
 
         if (!shopIdleRunning)
         {
@@ -497,7 +592,8 @@ public partial class MainMenu
             shopChest.root.anchoredPosition = basePosition + new Vector2(0f, Mathf.Sin(t * 2f) * 10f);
             shopChest.root.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * 1.3f) * 2.5f);
             shopChest.lid.localRotation = Quaternion.Euler(0f, 0f, Mathf.Max(0f, Mathf.Sin(t * 1.1f) - 0.55f) * 22f);
-            shopChest.glow.color = new Color(1f, 0.85f, 0.4f, 0.18f + Mathf.Sin(t * 2.4f) * 0.06f);
+            Color glow = Chests.Selected.glow;
+            shopChest.glow.color = new Color(glow.r, glow.g, glow.b, 0.18f + Mathf.Sin(t * 2.4f) * 0.06f);
             shopChest.glow.rectTransform.localRotation = Quaternion.Euler(0f, 0f, t * 12f);
             yield return null;
         }
@@ -514,16 +610,18 @@ public partial class MainMenu
             return;
         }
 
-        if (PlayerWallet.MissingCount(art) == 0 || PlayerWallet.Coins < PlayerWallet.ChestPrice)
+        ChestType chest = Chests.Selected;
+
+        if (PlayerWallet.MissingCount(art, chest) == 0 || PlayerWallet.Coins < chest.price)
         {
             GameAudio.Play(AudioEvent.ShopDenied);
             StartCoroutine(Wobble(openChestImage.rectTransform));
             return;
         }
 
-        PlayerWallet.TrySpend(PlayerWallet.ChestPrice);
+        PlayerWallet.TrySpend(chest.price);
 
-        if (!PlayerWallet.Roll(art, out int skinIndex, out int chromaIndex))
+        if (!PlayerWallet.Roll(art, chest, out int skinIndex, out int chromaIndex))
         {
             return;
         }
@@ -532,7 +630,7 @@ public partial class MainMenu
         PlayerWallet.Unlock(art.players[skinIndex].label, chromaIndex);
         GameAudio.Play(AudioEvent.ShopBuy);
         RefreshShop();
-        StartCoroutine(OpenChestRoutine(skinIndex, chromaIndex));
+        StartCoroutine(OpenChestRoutine(skinIndex, chromaIndex, chest));
     }
 
     IEnumerator Wobble(RectTransform rect)
@@ -565,15 +663,114 @@ public partial class MainMenu
 
         editTitle.text = Loc.F("edit.titleOf", Loc.SkinName(skin.label).ToUpperInvariant());
         editPreview.sprite = ChromaFront(skin, equipped);
-        editRarity.text = equipped >= 0 ? Loc.ChromaName(chromas[equipped].label) + "\n" + SkinChroma.RarityName(chromas[equipped].rarity) : Loc.T("edit.default");
+        ShowFx(editPreview, equipped >= 0 ? chromas[equipped].Fx : default);
+        editRarity.text = equipped >= 0 ? Loc.ChromaName(chromas[equipped]) + "\n" + SkinChroma.RarityName(chromas[equipped].rarity) : Loc.T("edit.default");
         editRarity.color = equipped >= 0 ? SkinChroma.RarityColor(chromas[equipped].rarity) * 0.78f : MenuBuilder.DarkText;
         editRarity.fontSize = 34f;
 
         AddEditCard(skin, -1, equipped == -1, true);
 
+        // chromy pogrupowane według motywu i rzadkości
+        List<int> order = new List<int>();
+
         for (int c = 0; c < chromas.Length; c++)
         {
+            order.Add(c);
+        }
+
+        order.Sort((a, b) =>
+        {
+            int byTheme = chromas[a].theme.CompareTo(chromas[b].theme);
+            return byTheme != 0 ? byTheme : chromas[a].rarity != chromas[b].rarity ? chromas[a].rarity.CompareTo(chromas[b].rarity) : a.CompareTo(b);
+        });
+
+        foreach (int c in order)
+        {
             AddEditCard(skin, c, equipped == c, PlayerWallet.Owns(skin.label, c));
+        }
+    }
+
+    // Chromy jest dużo, więc zamiast jednego rzędu jest przewijana siatka 5 kolumn. Zwraca obiekt, do którego trafiają karty.
+    RectTransform EnsureEditGrid(RectTransform chromas)
+    {
+        Transform existing = chromas.Find("Viewport/Content");
+
+        if (existing != null)
+        {
+            return (RectTransform)existing;
+        }
+
+        HorizontalLayoutGroup row = chromas.GetComponent<HorizontalLayoutGroup>();
+
+        if (row != null)
+        {
+            row.enabled = false;
+        }
+
+        ScrollRect scroll = chromas.GetComponent<ScrollRect>();
+
+        if (scroll == null)
+        {
+            scroll = chromas.gameObject.AddComponent<ScrollRect>();
+        }
+
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 50f;
+
+        RectTransform viewport = NewRect("Viewport", chromas);
+        Stretch(viewport);
+        viewport.gameObject.AddComponent<RectMask2D>();
+        viewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
+
+        RectTransform content = NewRect("Content", viewport);
+        content.anchorMin = new Vector2(0f, 1f);
+        content.anchorMax = new Vector2(1f, 1f);
+        content.pivot = new Vector2(0.5f, 1f);
+        content.offsetMin = Vector2.zero;
+        content.offsetMax = Vector2.zero;
+
+        GridLayoutGroup grid = content.gameObject.AddComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(190f, 300f);
+        grid.spacing = new Vector2(14f, 14f);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = 5;
+        grid.childAlignment = TextAnchor.UpperCenter;
+        grid.padding = new RectOffset(4, 4, 4, 20);
+
+        ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        scroll.viewport = viewport;
+        scroll.content = content;
+        return content;
+    }
+
+    // Włącza (albo wyłącza) efekt chromy na obrazku postaci w interfejsie.
+    static void ShowFx(Image image, ChromaFxLook look)
+    {
+        UiChromaFx emitter = image.GetComponent<UiChromaFx>();
+        UiEnchantGlint glint = image.GetComponent<UiEnchantGlint>();
+
+        if (emitter == null && look.HasParticles)
+        {
+            emitter = image.gameObject.AddComponent<UiChromaFx>();
+        }
+
+        if (glint == null && look.glint)
+        {
+            glint = image.gameObject.AddComponent<UiEnchantGlint>();
+        }
+
+        if (emitter != null)
+        {
+            emitter.Configure(image.rectTransform, look);
+        }
+
+        if (glint != null)
+        {
+            glint.Configure(look);
         }
     }
 
@@ -604,7 +801,7 @@ public partial class MainMenu
 
         Image preview = NewImage("Preview", card.transform, owned ? Color.white : new Color(0.12f, 0.08f, 0.12f, 1f), false);
         Anchor(preview.rectTransform, 0.06f, 0.34f, 0.94f, 0.97f);
-        preview.sprite = ChromaFront(skin, chroma);
+        preview.sprite = owned ? ChromaFront(skin, chroma) : ChromaFront(skin, -1);
         preview.preserveAspect = true;
         preview.raycastTarget = false;
 
@@ -624,8 +821,11 @@ public partial class MainMenu
             Anchor(padlock.rectTransform, 0.28f, 0.47f, 0.72f, 0.85f);
         }
 
-        string title = isDefault ? Loc.T("edit.default") : Loc.ChromaName(list[chroma].label);
+        string title = isDefault ? Loc.T("edit.default") : Loc.ChromaName(list[chroma]);
         TextMeshProUGUI name = NewText(card.transform, title, 34f, MenuBuilder.DarkText, TextAlignmentOptions.Center, FontStyles.Bold);
+        name.enableAutoSizing = true;
+        name.fontSizeMin = 18f;
+        name.fontSizeMax = 34f;
         Anchor(name.rectTransform, 0.02f, 0.19f, 0.98f, 0.34f);
 
         string state = equipped ? Loc.T("skin.selected") : owned ? "" : Loc.T("edit.locked");
@@ -924,9 +1124,10 @@ public partial class MainMenu
 
     // ---------- Animacja otwierania ----------
 
-    IEnumerator OpenChestRoutine(int skinIndex, int chromaIndex)
+    IEnumerator OpenChestRoutine(int skinIndex, int chromaIndex, ChestType chest)
     {
         chestBusy = true;
+        Color glowColor = chest.glow;
 
         GameArt art = GameArt.Instance;
         PlayerSprites skin = art.players[skinIndex];
@@ -945,7 +1146,8 @@ public partial class MainMenu
         ov.chest.root.localRotation = Quaternion.identity;
         ov.chest.root.anchoredPosition = new Vector2(0f, -60f);
         ov.chest.lid.localRotation = Quaternion.identity;
-        ov.chest.glow.color = new Color(1f, 0.85f, 0.4f, 0f);
+        ov.chest.glow.color = new Color(glowColor.r, glowColor.g, glowColor.b, 0f);
+        TintChest(ov.chest, chest);
         ClearParticles();
         resultChosen = false;
         equipAfterOpen = false;
@@ -970,7 +1172,7 @@ public partial class MainMenu
             float frequency = Mathf.Lerp(26f, 60f, u);
             ov.chest.root.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(time * frequency) * amplitude);
             ov.chest.root.localScale = Vector3.one * (1f + 0.09f * u * u + Mathf.Sin(time * 18f) * 0.015f * u);
-            ov.chest.glow.color = new Color(1f, 0.85f, 0.4f, 0.8f * u);
+            ov.chest.glow.color = new Color(glowColor.r, glowColor.g, glowColor.b, 0.8f * u);
             ov.chest.lid.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(time * frequency * 0.7f) * 3f * u);
 
             if (UnityEngine.Random.value < 0.2f + u * 0.5f)
@@ -1000,7 +1202,8 @@ public partial class MainMenu
         // 4. karta wylatuje ze skrzynki
         ov.cardBorder.color = rarityColor;
         ov.cardPreview.sprite = ChromaFront(skin, chromaIndex);
-        ov.cardName.text = Loc.SkinName(skin.label) + "  " + Loc.ChromaName(chroma.label);
+        ShowFx(ov.cardPreview, chroma.Fx);
+        ov.cardName.text = Loc.SkinName(skin.label) + "  " + Loc.ChromaName(chroma);
         ov.cardName.fontSize = 46f;
         ov.cardRarity.text = SkinChroma.RarityName(chroma.rarity) + "  -  " + Loc.T("chest.new");
         ov.cardRarity.color = rarityColor * 0.75f;
@@ -1046,6 +1249,7 @@ public partial class MainMenu
             ov.buttons.localScale = Vector3.one * (1f - u);
         });
 
+        ShowFx(ov.cardPreview, default);
         ov.root.gameObject.SetActive(false);
         ClearParticles();
         chestBusy = false;

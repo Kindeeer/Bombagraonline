@@ -33,6 +33,9 @@ public class PlayerSprites
 
     public SkinChroma[] ChromaList => chromas != null && chromas.Length > 0 ? chromas : SkinChroma.Defaults;
 
+    // Efekt wizualny aktualnej chromy (ustawiany przy składaniu wyglądu, nie zapisywany w scenie).
+    [NonSerialized] public ChromaFxLook fx;
+
     public Sprite Front => front != null ? front : skin != null ? skin.front : null;
     public Sprite Back => back != null ? back : skin != null ? skin.back : null;
     public Sprite Left => left != null ? left : skin != null ? skin.left : null;
@@ -284,7 +287,8 @@ public class GameArt : MonoBehaviour
             right = c.right != null ? c.right : ChromaBaker.Recolor(baseLook.Right, c),
             portrait = c.portrait != null ? c.portrait : ChromaBaker.Recolor(baseLook.Portrait, c),
             portraitDead = c.portraitDead != null ? c.portraitDead : ChromaBaker.Recolor(baseLook.PortraitDead, c),
-            tint = baseLook.tint
+            tint = baseLook.tint,
+            fx = c.Fx
         };
 
         chromaLooks[key] = look;

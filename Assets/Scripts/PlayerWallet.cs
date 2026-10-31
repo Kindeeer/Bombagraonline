@@ -7,7 +7,6 @@ using UnityEngine;
 public static class PlayerWallet
 {
     public const int WinReward = 10;
-    public const int ChestPrice = 100;
 
     // Nagroda za zabicie prawdziwego gracza (nie bota): 1-2 monety. Użyje jej tryb sieciowy, bo w grze z botami
     // nie ma kogo zabić "na prawdziwo".
@@ -146,8 +145,8 @@ public static class PlayerWallet
         Changed?.Invoke();
     }
 
-    // Ile chrom ze wszystkich skinów jeszcze nie jest Twoje.
-    public static int MissingCount(GameArt art)
+    // Ile chrom z puli skrzynki jeszcze nie jest Twoje.
+    public static int MissingCount(GameArt art, ChestType chest)
     {
         int missing = 0;
 
@@ -157,7 +156,7 @@ public static class PlayerWallet
 
             for (int c = 0; c < chromas.Length; c++)
             {
-                if (!Owns(art.players[skin].label, c))
+                if (chest.Accepts(chromas[c]) && !Owns(art.players[skin].label, c))
                 {
                     missing++;
                 }
@@ -167,20 +166,27 @@ public static class PlayerWallet
         return missing;
     }
 
-    public static int TotalCount(GameArt art)
+    // Ile chrom jest w puli skrzynki (razem ze zdobytymi).
+    public static int TotalCount(GameArt art, ChestType chest)
     {
         int total = 0;
 
         for (int skin = 0; skin < art.SkinCount; skin++)
         {
-            total += art.players[skin].ChromaList.Length;
+            foreach (SkinChroma chroma in art.players[skin].ChromaList)
+            {
+                if (chest.Accepts(chroma))
+                {
+                    total++;
+                }
+            }
         }
 
         return total;
     }
 
-    // Losuje chromę, której jeszcze nie masz (szansa zależy od rzadkości). false = masz już wszystkie.
-    public static bool Roll(GameArt art, out int skinIndex, out int chromaIndex)
+    // Losuje chromę z puli skrzynki, której jeszcze nie masz (szansa zależy od rzadkości). false = masz już wszystkie z tej puli.
+    public static bool Roll(GameArt art, ChestType chest, out int skinIndex, out int chromaIndex)
     {
         skinIndex = -1;
         chromaIndex = -1;
@@ -192,9 +198,9 @@ public static class PlayerWallet
 
             for (int c = 0; c < chromas.Length; c++)
             {
-                if (!Owns(art.players[skin].label, c))
+                if (chest.Accepts(chromas[c]) && !Owns(art.players[skin].label, c))
                 {
-                    totalWeight += SkinChroma.RarityWeight(chromas[c].rarity);
+                    totalWeight += chest.Weight(chromas[c].rarity);
                 }
             }
         }
@@ -212,12 +218,12 @@ public static class PlayerWallet
 
             for (int c = 0; c < chromas.Length; c++)
             {
-                if (Owns(art.players[skin].label, c))
+                if (!chest.Accepts(chromas[c]) || Owns(art.players[skin].label, c))
                 {
                     continue;
                 }
 
-                roll -= SkinChroma.RarityWeight(chromas[c].rarity);
+                roll -= chest.Weight(chromas[c].rarity);
 
                 if (roll < 0)
                 {

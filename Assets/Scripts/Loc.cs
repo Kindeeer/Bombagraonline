@@ -216,6 +216,12 @@ public static class Loc
         return TOr("chroma." + label, label);
     }
 
+    // Nazwa chromy w wybranym języku (angielska z pola english, a gdy jej brak, polska).
+    public static string ChromaName(SkinChroma chroma)
+    {
+        return Current == Language.English && !string.IsNullOrEmpty(chroma.english) ? chroma.english : chroma.label;
+    }
+
     public static string Pickup(PickupDefinition definition)
     {
         return definition == null ? "" : TOr("pickup." + definition.name, definition.displayName);
