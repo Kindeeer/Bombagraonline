@@ -84,10 +84,12 @@ public static class MenuBuilder
         Anchor(logo.rectTransform, 0.25f, 0.62f, 0.75f, 0.97f);
         logo.gameObject.SetActive(false);
 
-        RectTransform column = AddColumn(page, 760f, 620f, -150f);
-        AddMenuButton(column, "Button_Play", "PLAY", OrangeColor, 190f, 100f);
-        AddMenuButton(column, "Button_Skins", "SKINS", ChocolateColor, 150f, 70f);
-        AddMenuButton(column, "Button_Settings", "SETTINGS", ChocolateColor, 150f, 70f);
+        RectTransform column = AddColumn(page, 760f, 640f, -150f);
+        column.GetComponent<VerticalLayoutGroup>().spacing = 20f;
+        AddMenuButton(column, "Button_Play", "PLAY", OrangeColor, 170f, 100f);
+        AddMenuButton(column, "Button_Skins", "SKINS", ChocolateColor, 120f, 64f);
+        AddMenuButton(column, "Button_Shop", "CHESTS", PlumColor, 120f, 64f);
+        AddMenuButton(column, "Button_Settings", "SETTINGS", ChocolateColor, 120f, 64f);
     }
 
     static void BuildMode(Transform root)
@@ -233,14 +235,14 @@ public static class MenuBuilder
 
     // ---------- Klocki ----------
 
-    static RectTransform NewPage(string name, Transform parent)
+    public static RectTransform NewPage(string name, Transform parent)
     {
         RectTransform rect = NewRect(name, parent);
         Stretch(rect);
         return rect;
     }
 
-    static void AddTitle(RectTransform page, string text, float size)
+    public static void AddTitle(RectTransform page, string text, float size)
     {
         TextMeshProUGUI title = NewText(page, text, size, CardColor, TextAlignmentOptions.Center, FontStyles.Bold);
         title.name = "Title";
@@ -250,7 +252,7 @@ public static class MenuBuilder
     }
 
     // Pionowa kolumna przycisków wyśrodkowana na ekranie.
-    static RectTransform AddColumn(RectTransform page, float width, float height, float offsetY)
+    public static RectTransform AddColumn(RectTransform page, float width, float height, float offsetY)
     {
         RectTransform column = NewRect("Buttons", page);
         column.anchorMin = new Vector2(0.5f, 0.5f);
@@ -269,7 +271,7 @@ public static class MenuBuilder
         return column;
     }
 
-    static Button AddMenuButton(RectTransform column, string objectName, string text, Color color, float height, float fontSize)
+    public static Button AddMenuButton(RectTransform column, string objectName, string text, Color color, float height, float fontSize)
     {
         Button button = NewButton(column, text, color, null, fontSize);
         button.name = objectName;
@@ -277,7 +279,7 @@ public static class MenuBuilder
         return button;
     }
 
-    static void AddBackButton(RectTransform page, string objectName = "Button_Back")
+    public static void AddBackButton(RectTransform page, string objectName = "Button_Back")
     {
         Button back = NewButton(page, "WSTECZ", PlumColor, null, 52f);
         back.name = objectName;

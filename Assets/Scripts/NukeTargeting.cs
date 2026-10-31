@@ -107,7 +107,7 @@ public class NukeTargeting : MonoBehaviour
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 1f;
 
-        TextMeshProUGUI label = UiKit.NewText(canvasObject.transform, "WSKAŻ MIEJSCE NA MAPIE I NACIŚNIJ ATOM!", 64f,
+        TextMeshProUGUI label = UiKit.NewText(canvasObject.transform, Loc.T("nuke.hint"), 64f,
             new Color(1f, 0.85f, 0.3f), TextAlignmentOptions.Center, FontStyles.Bold);
         label.outlineWidth = 0.3f;
         label.outlineColor = new Color32(60, 10, 10, 255);

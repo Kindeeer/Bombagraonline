@@ -28,6 +28,11 @@ public class PlayerSprites
     [Tooltip("Dodatkowe zabarwienie postaci. Biały = bez zmian.")]
     public Color tint = Color.white;
 
+    [Header("Chromy (warianty kolorystyczne ze skrzynek). Puste = domyślne cztery: fioletowy, lodowy, złoty, tęczowy")]
+    public SkinChroma[] chromas;
+
+    public SkinChroma[] ChromaList => chromas != null && chromas.Length > 0 ? chromas : SkinChroma.Defaults;
+
     public Sprite Front => front != null ? front : skin != null ? skin.front : null;
     public Sprite Back => back != null ? back : skin != null ? skin.back : null;
     public Sprite Left => left != null ? left : skin != null ? skin.left : null;
@@ -92,23 +97,17 @@ public class GameArt : MonoBehaviour
     public Sprite[] cookieVariants;
     [Tooltip("Gruba czekolada, dwa wybuchy. Po pierwszym wybuchu zamienia się w zwykły blok.")]
     public Sprite[] heavyCookieVariants;
+    [Tooltip("Gruba czekolada po pierwszym wybuchu: ta sama grafika, ale pęknięta (256 x 384 px, ten sam pivot). Puste = pęknięta wygląda jak zwykły blok.")]
+    public Sprite heavyCookieCracked;
     public Sprite[] honeyBlockVariants;
     public Sprite[] sodaBlockVariants;
-    [Tooltip("Płaska kałuża po miodzie (128 x 128 px).")]
+    [Tooltip("Środek kałuży po miodzie: wypełnia całe pole (256 x 256 px).")]
     public Sprite[] honeyPuddleVariants;
     public Sprite[] sodaPuddleVariants;
-
-    // Stare pojedyncze pola z pierwszej wersji GameArt. Zostają ukryte, żeby nie zgubić wcześniej wpisanych grafik:
-    // przy pierwszej edycji trafiają na listy powyżej.
-    [HideInInspector] public Sprite floor;
-    [HideInInspector] public Sprite border;
-    [HideInInspector] public Sprite pillar;
-    [HideInInspector] public Sprite cookie;
-    [HideInInspector] public Sprite heavyCookie;
-    [HideInInspector] public Sprite honeyBlock;
-    [HideInInspector] public Sprite sodaBlock;
-    [HideInInspector] public Sprite honeyPuddle;
-    [HideInInspector] public Sprite sodaPuddle;
+    [Tooltip("Brzeg kałuży po miodzie (256 x 256 px). Płaska krawędź (dół grafiki) przylega do reszty kałuży, " +
+        "a falista (góra) zostaje na zewnątrz. Gra sama obraca brzeg we właściwą stronę.")]
+    public Sprite honeyPuddleSide;
+    public Sprite sodaPuddleSide;
 
     [Header("Fontanna")]
     public Sprite fountainBody;
@@ -234,7 +233,62 @@ public class GameArt : MonoBehaviour
     public PlayerSprites PlayerFor(int slot)
     {
         int index = SkinIndexForSlot(slot);
-        return index >= 0 ? players[index] : null;
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        // gracz (slot 0) gra założoną chromą swojego skina, boty zwykłymi wyglądami
+        if (slot == 0)
+        {
+            return SkinLook(index, PlayerWallet.Equipped(players[index].label));
+        }
+
+        return players[index];
+    }
+
+    static readonly System.Collections.Generic.Dictionary<(PlayerSprites, SkinChroma), PlayerSprites> chromaLooks =
+        new System.Collections.Generic.Dictionary<(PlayerSprites, SkinChroma), PlayerSprites>();
+
+    // Wygląd skina z daną chromą (chroma < 0 = zwykły). Własne grafiki chromy mają pierwszeństwo, resztę przekolorowuje kod.
+    public PlayerSprites SkinLook(int skinIndex, int chroma)
+    {
+        if (skinIndex < 0 || skinIndex >= SkinCount)
+        {
+            return null;
+        }
+
+        PlayerSprites baseLook = players[skinIndex];
+        SkinChroma[] list = baseLook.ChromaList;
+
+        if (chroma < 0 || chroma >= list.Length)
+        {
+            return baseLook;
+        }
+
+        SkinChroma c = list[chroma];
+        (PlayerSprites, SkinChroma) key = (baseLook, c);
+
+        if (chromaLooks.TryGetValue(key, out PlayerSprites cached) && cached.Front != null)
+        {
+            return cached;
+        }
+
+        PlayerSprites look = new PlayerSprites
+        {
+            label = baseLook.label + " " + c.label,
+            front = c.front != null ? c.front : ChromaBaker.Recolor(baseLook.Front, c),
+            back = c.back != null ? c.back : ChromaBaker.Recolor(baseLook.Back, c),
+            left = c.left != null ? c.left : ChromaBaker.Recolor(baseLook.Left, c),
+            right = c.right != null ? c.right : ChromaBaker.Recolor(baseLook.Right, c),
+            portrait = c.portrait != null ? c.portrait : ChromaBaker.Recolor(baseLook.Portrait, c),
+            portraitDead = c.portraitDead != null ? c.portraitDead : ChromaBaker.Recolor(baseLook.PortraitDead, c),
+            tint = baseLook.tint
+        };
+
+        chromaLooks[key] = look;
+        return look;
     }
 
     public int SkinCount => players != null ? players.Length : 0;
@@ -256,9 +310,43 @@ public class GameArt : MonoBehaviour
             return selected;
         }
 
-        // boty: kolejne skiny z pominięciem wybranego (przy 4 skinach i wyborze pierwszego: bot 1 = skin 2, bot 2 = skin 3...)
-        int other = (slot - 1) % (count - 1);
-        return other < selected ? other : other + 1;
+        // boty: losowe zwierzaki, żadnych dwóch takich samych (dopóki starcza skinów) i żaden jak gracz
+        if (botSkins == null || botSkinsFor != selected || botSkinsCount != count)
+        {
+            ShuffleBotSkins();
+        }
+
+        return botSkins[(slot - 1) % botSkins.Length];
+    }
+
+    int[] botSkins;
+    int botSkinsFor = -1;
+    int botSkinsCount;
+
+    // Losuje skiny botów na nową rundę: wszystkie skiny poza wybranym przez gracza, w losowej kolejności.
+    public void ShuffleBotSkins()
+    {
+        int count = SkinCount;
+        int selected = Mathf.Clamp(SkinSelection.Index, 0, Mathf.Max(count - 1, 0));
+        System.Collections.Generic.List<int> pool = new System.Collections.Generic.List<int>();
+
+        for (int i = 0; i < count; i++)
+        {
+            if (i != selected)
+            {
+                pool.Add(i);
+            }
+        }
+
+        for (int i = pool.Count - 1; i > 0; i--)
+        {
+            int j = UnityEngine.Random.Range(0, i + 1);
+            (pool[i], pool[j]) = (pool[j], pool[i]);
+        }
+
+        botSkins = pool.Count > 0 ? pool.ToArray() : new[] { selected };
+        botSkinsFor = selected;
+        botSkinsCount = count;
     }
 
     public Sprite IconFor(PickupIcon icon)
@@ -400,6 +488,21 @@ public class GameArt : MonoBehaviour
         }
     }
 
+    public Sprite HeavyCookieCrackedSprite { get { ArtTheme t = Theme; return Themed(t != null ? t.heavyCookieCracked : null, heavyCookieCracked); } }
+
+    // Brzeg kałuży (obracany przez grę): z motywu rundy, a gdy w motywie pole jest puste, z tego obiektu.
+    public Sprite PuddleSideSprite(TileType type)
+    {
+        ArtTheme t = Theme;
+
+        switch (type)
+        {
+            case TileType.HoneyPuddle: return Themed(t != null ? t.honeyPuddleSide : null, honeyPuddleSide);
+            case TileType.SodaPuddle: return Themed(t != null ? t.sodaPuddleSide : null, sodaPuddleSide);
+            default: return null;
+        }
+    }
+
     public Sprite EmoteFor(Emote emote)
     {
         switch (emote)
@@ -441,34 +544,7 @@ public class GameArt : MonoBehaviour
             }
         }
 
-        MigrateLegacyFields();
         EditorApplication.delayCall += ApplyToTiles;
-    }
-
-    // Przenosi grafiki wpisane w starej wersji (pojedyncze pola) na listy wariantów.
-    void MigrateLegacyFields()
-    {
-        floorVariants = Migrated(floorVariants, ref floor);
-        borderVariants = Migrated(borderVariants, ref border);
-        pillarVariants = Migrated(pillarVariants, ref pillar);
-        cookieVariants = Migrated(cookieVariants, ref cookie);
-        heavyCookieVariants = Migrated(heavyCookieVariants, ref heavyCookie);
-        honeyBlockVariants = Migrated(honeyBlockVariants, ref honeyBlock);
-        sodaBlockVariants = Migrated(sodaBlockVariants, ref sodaBlock);
-        honeyPuddleVariants = Migrated(honeyPuddleVariants, ref honeyPuddle);
-        sodaPuddleVariants = Migrated(sodaPuddleVariants, ref sodaPuddle);
-    }
-
-    static Sprite[] Migrated(Sprite[] list, ref Sprite legacy)
-    {
-        if (legacy == null)
-        {
-            return list;
-        }
-
-        Sprite old = legacy;
-        legacy = null;
-        return list == null || list.Length == 0 ? new[] { old } : list;
     }
 
     static Sprite First(Sprite[] list)
@@ -513,79 +589,6 @@ public class GameArt : MonoBehaviour
         EditorUtility.SetDirty(tile);
     }
 
-    // Uzupełnia puste pola tym, co gra już teraz używa (kafelki, bomba, ogień, ikony, buźki, gracz z P1).
-    public void FillEmptyFromProject()
-    {
-        Undo.RecordObject(this, "Fill Game Art");
-
-        MigrateLegacyFields();
-
-        floorVariants = FilledList(floorVariants, "Tile_Ground");
-        borderVariants = FilledList(borderVariants, "Tile_Border");
-        pillarVariants = FilledList(pillarVariants, "Tile_Pillar");
-        cookieVariants = FilledList(cookieVariants, "Tile_Cookie");
-        heavyCookieVariants = FilledList(heavyCookieVariants, "Tile_HeavyCookie");
-        honeyBlockVariants = FilledList(honeyBlockVariants, "Tile_Honey");
-        sodaBlockVariants = FilledList(sodaBlockVariants, "Tile_Soda");
-        honeyPuddleVariants = FilledList(honeyPuddleVariants, "Tile_Honey_Puddle");
-        sodaPuddleVariants = FilledList(sodaPuddleVariants, "Tile_Soda_Puddle");
-
-        bomb = bomb != null ? bomb : PrefabSprite("Assets/Prefabs/Bomb_0.prefab");
-        flame = flame != null ? flame : PrefabSprite("Assets/Prefabs/Flame.prefab");
-
-        uiPanel = uiPanel != null ? uiPanel : AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/Panel.png");
-        uiKeyCap = uiKeyCap != null ? uiKeyCap : AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/KeyCap.png");
-        uiFace = uiFace != null ? uiFace : AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/Face.png");
-        uiFaceDead = uiFaceDead != null ? uiFaceDead : AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/UI/FaceDead.png");
-
-        // ikony przedmiotów z istniejących definicji
-        foreach (string guid in AssetDatabase.FindAssets("t:PickupDefinition"))
-        {
-            PickupDefinition definition = AssetDatabase.LoadAssetAtPath<PickupDefinition>(AssetDatabase.GUIDToAssetPath(guid));
-
-            if (definition == null || definition.icon == null)
-            {
-                continue;
-            }
-
-            switch (definition.placeholderIcon)
-            {
-                case PickupIcon.Bomb: iconBomb = iconBomb != null ? iconBomb : definition.icon; break;
-                case PickupIcon.Range: iconRange = iconRange != null ? iconRange : definition.icon; break;
-                case PickupIcon.Speed: iconSpeed = iconSpeed != null ? iconSpeed : definition.icon; break;
-                case PickupIcon.Hammer: iconHammer = iconHammer != null ? iconHammer : definition.icon; break;
-                case PickupIcon.Rocket: iconRocket = iconRocket != null ? iconRocket : definition.icon; break;
-                case PickupIcon.Skull: iconSkull = iconSkull != null ? iconSkull : definition.icon; break;
-            }
-        }
-
-        // postać i cień z gracza w scenie
-        PlayerVisual visual = FindAnyObjectByType<PlayerVisual>();
-
-        if (visual != null && players != null && players.Length > 0 && players[0] != null)
-        {
-            PlayerSprites p1 = players[0];
-            p1.front = p1.front != null ? p1.front : visual.front;
-            p1.back = p1.back != null ? p1.back : visual.back;
-            p1.left = p1.left != null ? p1.left : visual.left;
-            p1.right = p1.right != null ? p1.right : visual.right;
-
-            if (playerShadow == null)
-            {
-                foreach (SpriteRenderer renderer in visual.transform.root.GetComponentsInChildren<SpriteRenderer>(true))
-                {
-                    if (renderer.name == "Shadow" && renderer.sprite != null)
-                    {
-                        playerShadow = renderer.sprite;
-                        break;
-                    }
-                }
-            }
-        }
-
-        EditorUtility.SetDirty(this);
-    }
-
     static Sprite[] Copy(Sprite[] list)
     {
         return list != null ? (Sprite[])list.Clone() : null;
@@ -607,6 +610,9 @@ public class GameArt : MonoBehaviour
         theme.sodaBlockVariants = Copy(sodaBlockVariants);
         theme.honeyPuddleVariants = Copy(honeyPuddleVariants);
         theme.sodaPuddleVariants = Copy(sodaPuddleVariants);
+        theme.heavyCookieCracked = heavyCookieCracked;
+        theme.honeyPuddleSide = honeyPuddleSide;
+        theme.sodaPuddleSide = sodaPuddleSide;
         theme.fountainBody = fountainBody;
         theme.fountainStream = fountainStream;
         theme.fountainDrop = fountainDrop;
@@ -629,31 +635,6 @@ public class GameArt : MonoBehaviour
 
         Debug.Log("Bomb Game: motyw zapisany jako " + path + " i dodany do listy motywów w GameArt.");
         return theme;
-    }
-
-    // Pusta lista dostaje jeden wariant z pliku kafelka, niepusta zostaje bez zmian.
-    static Sprite[] FilledList(Sprite[] list, string tileName)
-    {
-        if (list != null && list.Length > 0)
-        {
-            return list;
-        }
-
-        Sprite sprite = TileSprite(tileName);
-        return sprite != null ? new[] { sprite } : list;
-    }
-
-    static Sprite TileSprite(string tileName)
-    {
-        Tile tile = AssetDatabase.LoadAssetAtPath<Tile>(TilesFolder + tileName + ".asset");
-        return tile != null ? tile.sprite : null;
-    }
-
-    static Sprite PrefabSprite(string path)
-    {
-        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        SpriteRenderer renderer = prefab != null ? prefab.GetComponentInChildren<SpriteRenderer>(true) : null;
-        return renderer != null ? renderer.sprite : null;
     }
 #endif
 }
@@ -692,5 +673,11 @@ public static class SkinSelection
             PlayerPrefs.SetInt(Key, cached);
             Version++;
         }
+    }
+
+    // Zmieniło się założenie chromy (wygląd skina), więc HUD i postacie odświeżają grafiki.
+    public static void NotifyChanged()
+    {
+        Version++;
     }
 }

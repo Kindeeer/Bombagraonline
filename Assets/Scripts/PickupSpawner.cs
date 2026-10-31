@@ -52,7 +52,7 @@ public class PickupSpawner : MonoBehaviour
 
     void OnBlockDestroyed(Vector2Int cell, TileType type)
     {
-        if (table == null || Random.value >= table.blockDropChance)
+        if (table == null || Random.value >= table.blockDropChance * GameRules.DropChanceMultiplier)
         {
             return;
         }

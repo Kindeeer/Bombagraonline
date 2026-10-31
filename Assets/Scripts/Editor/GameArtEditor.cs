@@ -25,10 +25,9 @@ public class GameArtEditor : Editor
 
         GameObject go = new GameObject("GameArt", typeof(GameArt));
         Undo.RegisterCreatedObjectUndo(go, "Create Game Art");
-        go.GetComponent<GameArt>().FillEmptyFromProject();
         Selection.activeGameObject = go;
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-        Debug.Log("Bomb Game: obiekt GameArt utworzony i uzupełniony tym, co gra już używa. Zapisz scenę (Ctrl+S).");
+        Debug.Log("Bomb Game: obiekt GameArt utworzony. Zapisz scenę (Ctrl+S).");
     }
 
     public override void OnInspectorGUI()
@@ -40,15 +39,10 @@ public class GameArtEditor : Editor
             "którą sama rysuje. Kafelki z sekcji Plansza są wpisywane też w pliki w Assets/Tiles.",
             MessageType.Info);
 
-        if (GUILayout.Button("Uzupełnij puste pola tym, co gra już używa"))
-        {
-            art.FillEmptyFromProject();
-        }
-
-        if (GUILayout.Button("Wpisz kafelki w pliki Assets/Tiles"))
-        {
-            art.ApplyToTiles();
-        }
+        EditorGUILayout.HelpBox(
+            "Skiny postaci są na samej górze w liście Players (każdy element to jeden zwierzak: cztery kierunki i dwie buźki). " +
+            "Nowy skin dodasz przyciskiem + pod listą Players i wpisaniem jego grafik.",
+            MessageType.None);
 
         EditorGUILayout.BeginHorizontal();
         newThemeName = EditorGUILayout.TextField("Nazwa motywu", newThemeName);

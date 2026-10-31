@@ -153,6 +153,76 @@ public static class UiKit
         return fx;
     }
 
+    // Pole do wpisywania tekstu (nick, kod pokoju). Na telefonie otwiera klawiaturę systemową.
+    public static TMP_InputField NewInputField(Transform parent, string placeholder, float fontSize, int maxLength)
+    {
+        Image back = NewImage("InputField", parent, new Color(1f, 1f, 1f, 0.97f));
+        TMP_InputField field = back.gameObject.AddComponent<TMP_InputField>();
+
+        RectTransform area = NewRect("TextArea", back.transform);
+        Stretch(area, 16f);
+        area.gameObject.AddComponent<RectMask2D>();
+
+        TextMeshProUGUI hint = NewText(area, placeholder, fontSize, new Color(0.45f, 0.40f, 0.43f, 0.75f), TextAlignmentOptions.MidlineLeft, FontStyles.Italic);
+        hint.name = "Placeholder";
+        Stretch(hint.rectTransform);
+
+        TextMeshProUGUI text = NewText(area, "", fontSize, new Color(0.15f, 0.12f, 0.15f), TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+        Stretch(text.rectTransform);
+
+        field.textViewport = area;
+        field.textComponent = text;
+        field.placeholder = hint;
+        field.characterLimit = maxLength;
+        field.caretColor = new Color(0.15f, 0.12f, 0.15f);
+        field.selectionColor = new Color(0.93f, 0.55f, 0.18f, 0.45f);
+        return field;
+    }
+
+    // Suwak ze ścieżką, wypełnieniem i dużą gałką (łatwo złapać palcem).
+    public static Slider NewSlider(Transform parent, float min, float max, bool wholeNumbers, Color fillColor)
+    {
+        RectTransform root = NewRect("Slider", parent);
+        Slider slider = root.gameObject.AddComponent<Slider>();
+
+        Image track = NewImage("Track", root, new Color(0f, 0f, 0f, 0.30f));
+        Anchor(track.rectTransform, 0f, 0.38f, 1f, 0.62f);
+        track.raycastTarget = false;
+
+        RectTransform fillArea = NewRect("FillArea", root);
+        Anchor(fillArea, 0f, 0.38f, 1f, 0.62f);
+        fillArea.offsetMin = new Vector2(24f, 0f);
+        fillArea.offsetMax = new Vector2(-24f, 0f);
+
+        Image fill = NewImage("Fill", fillArea, fillColor);
+        fill.raycastTarget = false;
+        fill.rectTransform.anchorMin = new Vector2(0f, 0f);
+        fill.rectTransform.anchorMax = new Vector2(0f, 1f);
+        fill.rectTransform.offsetMin = new Vector2(-24f, 0f);
+        fill.rectTransform.offsetMax = new Vector2(0f, 0f);
+
+        // suwak sam rozciąga gałkę na całą wysokość obszaru, więc obszar ma stałą wysokość gałki (okrągła gałka)
+        RectTransform handleArea = NewRect("HandleArea", root);
+        handleArea.anchorMin = new Vector2(0f, 0.5f);
+        handleArea.anchorMax = new Vector2(1f, 0.5f);
+        handleArea.pivot = new Vector2(0.5f, 0.5f);
+        handleArea.sizeDelta = new Vector2(-48f, 52f);
+        handleArea.anchoredPosition = Vector2.zero;
+
+        Image handle = NewImage("Handle", handleArea, Color.white, false);
+        handle.sprite = CircleSprite();
+        handle.rectTransform.sizeDelta = new Vector2(52f, 0f);
+
+        slider.fillRect = fill.rectTransform;
+        slider.handleRect = handle.rectTransform;
+        slider.targetGraphic = handle;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.wholeNumbers = wholeNumbers;
+        slider.minValue = min;
+        slider.maxValue = max;
+        return slider;
+    }
+
     // Napis na przycisku (pierwszy TextMeshPro w jego dzieciach).
     public static void SetButtonText(Button button, string text)
     {

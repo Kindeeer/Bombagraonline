@@ -92,6 +92,12 @@ public class BombController : MonoBehaviour
     // Stawia bombę (z premią z buffa NextBomb). Używają jej Spacja i boty. Zwraca true, gdy bomba stanęła.
     public bool PlaceBomb()
     {
+        // w poczekalni multiplayer nie stawia się bomb
+        if (LobbyState.InLobby)
+        {
+            return false;
+        }
+
         int rangeBonus = 0;
         bool overLimit = false;
 

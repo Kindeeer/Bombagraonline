@@ -18,12 +18,12 @@ public class PickupTable : ScriptableObject
 
     public PickupDefinition PickFromBlocks()
     {
-        return Pick(item => item.weightFromBlocks);
+        return Pick(item => GameRules.WeightFromBlocks(item));
     }
 
     public PickupDefinition PickFromFountain()
     {
-        return Pick(item => item.weightFromFountain);
+        return Pick(item => GameRules.WeightFromFountain(item));
     }
 
     PickupDefinition Pick(Func<PickupDefinition, int> weightOf)

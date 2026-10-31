@@ -1,0 +1,233 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Portfel gracza: monety, odblokowane chromy skinów i założone chromy. Wszystko zapamiętane na telefonie (PlayerPrefs).
+// Monety dostaje się za wygrane rundy (WinReward). Skrzynka kosztuje ChestPrice i losuje chromę, której jeszcze nie masz.
+public static class PlayerWallet
+{
+    public const int WinReward = 10;
+    public const int ChestPrice = 100;
+
+    // Nagroda za zabicie prawdziwego gracza (nie bota): 1-2 monety. Użyje jej tryb sieciowy, bo w grze z botami
+    // nie ma kogo zabić "na prawdziwo".
+    public const int PlayerKillReward = 2;
+
+    const string CoinsKey = "coins";
+    const string OwnedKey = "chromas_owned";
+    const string EquippedKey = "chroma_equipped_";
+
+    static int coins = -1;
+    static HashSet<string> owned;
+
+    public static event Action Changed;
+
+#if UNITY_EDITOR
+    // W edytorze każde wciśnięcie Play zaczyna od zera (bez monet i chrom), żeby dało się testować losowanie od początku.
+    // Wyłączysz to w menu Bomb Game > Zachowuj monety i chromy między uruchomieniami Play.
+    public const string KeepProgressPref = "BombaGra.KeepWalletInEditor";
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void ResetForEditorTests()
+    {
+        if (UnityEditor.EditorPrefs.GetBool(KeepProgressPref, false))
+        {
+            return;
+        }
+
+        foreach (string token in PlayerPrefs.GetString(OwnedKey, "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            PlayerPrefs.DeleteKey(EquippedKey + token.Split('#')[0]);
+        }
+
+        PlayerPrefs.DeleteKey(OwnedKey);
+        PlayerPrefs.DeleteKey(CoinsKey);
+        owned = null;
+        coins = -1;
+    }
+#endif
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        coins = -1;
+        owned = null;
+        Changed = null;
+    }
+
+    public static int Coins
+    {
+        get
+        {
+            if (coins < 0)
+            {
+                coins = PlayerPrefs.GetInt(CoinsKey, 0);
+            }
+
+            return coins;
+        }
+    }
+
+    public static void AddCoins(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        coins = Coins + amount;
+        PlayerPrefs.SetInt(CoinsKey, coins);
+        PlayerPrefs.Save();
+        Changed?.Invoke();
+    }
+
+    public static bool TrySpend(int amount)
+    {
+        if (Coins < amount)
+        {
+            return false;
+        }
+
+        coins = Coins - amount;
+        PlayerPrefs.SetInt(CoinsKey, coins);
+        PlayerPrefs.Save();
+        Changed?.Invoke();
+        return true;
+    }
+
+    // ---------- Chromy ----------
+
+    static string Token(string skinLabel, int chroma)
+    {
+        return skinLabel + "#" + chroma;
+    }
+
+    static HashSet<string> Owned
+    {
+        get
+        {
+            if (owned == null)
+            {
+                string saved = PlayerPrefs.GetString(OwnedKey, "");
+                owned = new HashSet<string>(saved.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries));
+            }
+
+            return owned;
+        }
+    }
+
+    public static bool Owns(string skinLabel, int chroma)
+    {
+        return Owned.Contains(Token(skinLabel, chroma));
+    }
+
+    public static void Unlock(string skinLabel, int chroma)
+    {
+        if (Owned.Add(Token(skinLabel, chroma)))
+        {
+            PlayerPrefs.SetString(OwnedKey, string.Join(";", Owned));
+            PlayerPrefs.Save();
+            Changed?.Invoke();
+        }
+    }
+
+    // Założona chroma skina (-1 = zwykły wygląd).
+    public static int Equipped(string skinLabel)
+    {
+        int chroma = PlayerPrefs.GetInt(EquippedKey + skinLabel, -1);
+        return chroma >= 0 && Owns(skinLabel, chroma) ? chroma : -1;
+    }
+
+    public static void Equip(string skinLabel, int chroma)
+    {
+        PlayerPrefs.SetInt(EquippedKey + skinLabel, chroma);
+        PlayerPrefs.Save();
+        SkinSelection.NotifyChanged();
+        Changed?.Invoke();
+    }
+
+    // Ile chrom ze wszystkich skinów jeszcze nie jest Twoje.
+    public static int MissingCount(GameArt art)
+    {
+        int missing = 0;
+
+        for (int skin = 0; skin < art.SkinCount; skin++)
+        {
+            SkinChroma[] chromas = art.players[skin].ChromaList;
+
+            for (int c = 0; c < chromas.Length; c++)
+            {
+                if (!Owns(art.players[skin].label, c))
+                {
+                    missing++;
+                }
+            }
+        }
+
+        return missing;
+    }
+
+    public static int TotalCount(GameArt art)
+    {
+        int total = 0;
+
+        for (int skin = 0; skin < art.SkinCount; skin++)
+        {
+            total += art.players[skin].ChromaList.Length;
+        }
+
+        return total;
+    }
+
+    // Losuje chromę, której jeszcze nie masz (szansa zależy od rzadkości). false = masz już wszystkie.
+    public static bool Roll(GameArt art, out int skinIndex, out int chromaIndex)
+    {
+        skinIndex = -1;
+        chromaIndex = -1;
+        int totalWeight = 0;
+
+        for (int skin = 0; skin < art.SkinCount; skin++)
+        {
+            SkinChroma[] chromas = art.players[skin].ChromaList;
+
+            for (int c = 0; c < chromas.Length; c++)
+            {
+                if (!Owns(art.players[skin].label, c))
+                {
+                    totalWeight += SkinChroma.RarityWeight(chromas[c].rarity);
+                }
+            }
+        }
+
+        if (totalWeight <= 0)
+        {
+            return false;
+        }
+
+        int roll = UnityEngine.Random.Range(0, totalWeight);
+
+        for (int skin = 0; skin < art.SkinCount; skin++)
+        {
+            SkinChroma[] chromas = art.players[skin].ChromaList;
+
+            for (int c = 0; c < chromas.Length; c++)
+            {
+                if (Owns(art.players[skin].label, c))
+                {
+                    continue;
+                }
+
+                roll -= SkinChroma.RarityWeight(chromas[c].rarity);
+
+                if (roll < 0)
+                {
+                    skinIndex = skin;
+                    chromaIndex = c;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}

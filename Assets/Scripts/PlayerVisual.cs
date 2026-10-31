@@ -11,11 +11,26 @@ public class PlayerVisual : MonoBehaviour
     public Sprite left;
     public Sprite right;
 
+    [Header("Kolejność rysowania")]
+    [Tooltip("Postać sortuje się po stopach i jest odrobinę niżej niż kafelki w jej rzędzie, więc zawsze stoi przed blokami obok siebie " +
+        "(ręce szersze od pola nie znikają raz za blokiem, raz przed nim). Większa wartość = postać mocniej przed blokami obok.")]
+    [Range(0f, 0.4f)] public float sortBias = 0.12f;
+
+    [Header("Rozmiar")]
+    [Tooltip("Skala postaci w grze. Grafiki zwierzaków mają 2 pola wysokości, przy 1 głowa wchodzi głęboko w blok nad postacią. " +
+        "Mniej = mniejsza postać.")]
+    [Range(0.4f, 1.2f)] public float bodyScale = 1f;
+
     [Header("Chodzenie (animacja z kodu)")]
     public float bobHeight = 0.05f;
     public float bobSpeed = 16f;
     public float squash = 0.05f;
+    [Tooltip("Pochylenie do przodu przy chodzeniu w bok.")]
     public float tiltDegrees = 3f;
+    [Tooltip("Kołysanie z boku na bok przy chodzeniu na wprost i do tyłu (postać ma jedną grafikę na kierunek, więc kroki robi kod).")]
+    public float waddleDegrees = 7f;
+    [Tooltip("Ile postać pochyla się w kierunku marszu, gdy idzie w bok.")]
+    public float leanDegrees = 6f;
     public float settleSpeed = 12f;
 
     // wygląd z prefabu/sceny (zapamiętany w Awake), do którego wraca postać bez własnych grafik skina
@@ -27,6 +42,8 @@ public class PlayerVisual : MonoBehaviour
 
     Transform bodyTransform;
     Vector3 basePosition;
+    Vector3 baseScale = Vector3.one;
+    Vector3 originalScale = Vector3.one;
     float walkTime;
 
     void Awake()
@@ -53,7 +70,22 @@ public class PlayerVisual : MonoBehaviour
         defaultColor = body.color;
 
         bodyTransform = body.transform;
-        basePosition = bodyTransform.localPosition;
+
+        // sortowanie po stopach (pivot), z lekkim przesunięciem w dół, żeby uniknąć remisu z blokami w tym samym rzędzie
+        body.spriteSortPoint = SpriteSortPoint.Pivot;
+        basePosition = bodyTransform.localPosition + Vector3.down * sortBias;
+
+        // postacie z grafik mają 2 pola wysokości, więc w grze są pomniejszone, żeby głowa nie wchodziła w blok nad nimi
+        originalScale = Vector3.one;
+        baseScale = originalScale * bodyScale;
+        bodyTransform.localScale = baseScale;
+    }
+
+    // Zmienia rozmiar postaci (ustawienie poczekalni "Wielkość postaci"). 1 = rozmiar z pola Body Scale.
+    public void SetBodyScale(float multiplier)
+    {
+        baseScale = originalScale * bodyScale * multiplier;
+        bodyTransform.localScale = baseScale;
     }
 
     // Ustawia grafiki postaci ze skina (GameArt). Pola skina, których brakuje, wracają do wyglądu domyślnego z prefabu,
@@ -81,7 +113,7 @@ public class PlayerVisual : MonoBehaviour
         body.flipX = movement.Facing == Facing.Left && left == null;
 
         Vector3 targetPosition = basePosition;
-        Vector3 targetScale = Vector3.one;
+        Vector3 targetScale = baseScale;
         float targetTilt = 0f;
 
         if (movement.IsMoving)
@@ -89,11 +121,22 @@ public class PlayerVisual : MonoBehaviour
             walkTime += Time.deltaTime * bobSpeed;
 
             float wave = Mathf.Sin(walkTime);
-            targetPosition = basePosition + new Vector3(0f, Mathf.Abs(wave) * bobHeight, 0f);
-            targetScale = new Vector3(1f + wave * wave * squash, 1f - wave * wave * squash, 1f);
+            targetPosition = basePosition + new Vector3(0f, Mathf.Abs(wave) * bobHeight, 0f) * bodyScale;
+            targetScale = Vector3.Scale(baseScale, new Vector3(1f + wave * wave * squash, 1f - wave * wave * squash, 1f));
 
-            bool sideways = movement.Facing == Facing.Left || movement.Facing == Facing.Right;
-            targetTilt = sideways ? wave * tiltDegrees : 0f;
+            // w bok: pochylenie w stronę marszu i lekkie bujanie, na wprost i do tyłu: kołysanie z nogi na nogę
+            if (movement.Facing == Facing.Right)
+            {
+                targetTilt = -leanDegrees + wave * tiltDegrees;
+            }
+            else if (movement.Facing == Facing.Left)
+            {
+                targetTilt = leanDegrees + wave * tiltDegrees;
+            }
+            else
+            {
+                targetTilt = wave * waddleDegrees;
+            }
         }
         else
         {

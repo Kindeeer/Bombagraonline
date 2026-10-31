@@ -9,8 +9,9 @@ public class PickupItem : MonoBehaviour
     public Vector2Int Cell { get; private set; }
     public bool CanCollect => landed && !leaving;
 
-    // Bąbelek leżący na planszy rysuje się nad blokami, żeby wystający górny kawałek bloku z rzędu przed nim go nie zasłaniał.
-    const int LandedSortingOrder = 2;
+    // Bąbelek leżący na planszy ma tę samą warstwę co bloki i postacie (1), więc układa się według wysokości na planszy:
+    // blok z rzędu przed nim (niżej) zasłania jego dół, tak jak zasłaniałby postać, i bąbelek nie wygląda, jakby wisiał nad blokiem.
+    const int LandedSortingOrder = 1;
 
     SortingGroup group;
     Transform visual;
@@ -113,7 +114,7 @@ public class PickupItem : MonoBehaviour
         float appear = EaseOutBack(Mathf.Clamp01((age - landedAt) / 0.3f));
         float pulse = 1f + Mathf.Sin(age * 4f) * 0.03f;
 
-        visual.localPosition = new Vector3(0f, 0.1f + Mathf.Sin(age * 3f) * 0.04f, 0f);
+        visual.localPosition = new Vector3(0f, 0.15f + Mathf.Sin(age * 3f) * 0.04f, 0f);
         visual.localScale = Vector3.one * (appear * pulse);
 
         if (Time.time >= fireImmuneUntil && GridMap.Instance != null && GridMap.Instance.IsOnFire(Cell))

@@ -118,6 +118,11 @@ public class GridMap : MonoBehaviour
 
     // warianty grafik z GameArt: kafelki na wariant dla każdego rodzaju i numer wariantu wylosowany dla każdego pola
     readonly Dictionary<TileType, TileBase[]> variantTiles = new Dictionary<TileType, TileBase[]>();
+    readonly Dictionary<TileType, TileBase> puddleSideTiles = new Dictionary<TileType, TileBase>();
+    readonly bool[] puddleIsCenter = new bool[CellCount];
+    // pola, na których gruba czekolada dostała pierwszy wybuch (typ pola to wtedy zwykły blok, ale rysujemy pęknięty)
+    readonly bool[] crackedBlock = new bool[CellCount];
+    TileBase crackedHeavyTile;
     readonly int[] variantSeed = new int[CellCount];
     int nextPuddleToken;
 
@@ -194,6 +199,13 @@ public class GridMap : MonoBehaviour
             return;
         }
 
+        // runda z poczekalni: arena i ilość bloków według ustawień hosta
+        if (GameRules.Custom)
+        {
+            forcedLayoutIndex = GameRules.Current.arena;
+            densityScale = Mathf.Clamp(densityScale * GameRules.Current.blocks, 0f, 1.5f);
+        }
+
         // 0. Jeśli są układy, losujemy jeden i malujemy go w tilemapie (z losowym odbiciem)
         if (layouts != null && layouts.Length > 0)
         {
@@ -243,6 +255,29 @@ public class GridMap : MonoBehaviour
         AddVariants(art, TileType.SodaBlock, sodaBlockTile);
         AddVariants(art, TileType.HoneyPuddle, honeyPuddleTile);
         AddVariants(art, TileType.SodaPuddle, sodaPuddleTile);
+
+        // brzegi kałuż (obracane): osobny kafelek, bo środek wypełnia całe pole, a brzeg ma jedną falistą krawędź
+        crackedHeavyTile = null;
+        Sprite cracked = art.HeavyCookieCrackedSprite;
+
+        if (cracked != null)
+        {
+            crackedHeavyTile = CreateVariantTile(cracked, heavyCookieTile as Tile);
+        }
+
+        puddleSideTiles.Clear();
+        AddPuddleSide(art, TileType.HoneyPuddle, honeyPuddleTile);
+        AddPuddleSide(art, TileType.SodaPuddle, sodaPuddleTile);
+    }
+
+    void AddPuddleSide(GameArt art, TileType type, TileBase template)
+    {
+        Sprite side = art.PuddleSideSprite(type);
+
+        if (side != null)
+        {
+            puddleSideTiles[type] = CreateVariantTile(side, template as Tile);
+        }
     }
 
     void AddVariants(GameArt art, TileType type, TileBase template)
@@ -595,16 +630,91 @@ public class GridMap : MonoBehaviour
         int cellIndex = Index(x, y);
         TileType currentType = grid[cellIndex];
         blockTile = blockTile != null ? PickTile(currentType, blockTile, cellIndex) : null;
+
+        if (currentType == TileType.Cookie && crackedBlock[cellIndex] && crackedHeavyTile != null)
+        {
+            blockTile = crackedHeavyTile;
+        }
         puddleTile = puddleTile != null ? PickTile(currentType, puddleTile, cellIndex) : null;
+
+        // brzeg kałuży: pole z jednym sąsiadem kałuży dostaje brzeg obrócony tak, że płaska krawędź przylega do sąsiada
+        Matrix4x4 puddleMatrix = Matrix4x4.identity;
+
+        if (puddleTile != null && !puddleIsCenter[cellIndex] && puddleSideTiles.TryGetValue(currentType, out TileBase sideTile)
+            && PuddleSideAngle(x, y, currentType, out float angle))
+        {
+            puddleTile = sideTile;
+            puddleMatrix = Matrix4x4.Rotate(Quaternion.Euler(0f, 0f, angle));
+        }
 
         if (effectsTilemap == null)
         {
             SetTileIfDifferent(blocksTilemap, tilePos, blockTile != null ? blockTile : puddleTile);
+
+            if (blockTile == null && puddleTile != null)
+            {
+                SetMatrixIfDifferent(blocksTilemap, tilePos, puddleMatrix);
+            }
+
             return;
         }
 
         SetTileIfDifferent(blocksTilemap, tilePos, blockTile);
         SetTileIfDifferent(effectsTilemap, tilePos, puddleTile);
+
+        if (puddleTile != null)
+        {
+            SetMatrixIfDifferent(effectsTilemap, tilePos, puddleMatrix);
+        }
+    }
+
+    static void SetMatrixIfDifferent(Tilemap tilemap, Vector3Int position, Matrix4x4 matrix)
+    {
+        if (tilemap.GetTransformMatrix(position) != matrix)
+        {
+            tilemap.SetTransformMatrix(position, matrix);
+        }
+    }
+
+    // Czy to pole kałuży ma dokładnie jednego sąsiada tej samej kałuży (wtedy rysujemy brzeg) i pod jakim kątem obrócić grafikę.
+    // Grafika brzegu ma płaską krawędź na dole, więc sąsiad pod spodem to 0 stopni, a sąsiad z prawej 90.
+    bool PuddleSideAngle(int x, int y, TileType type, out float angle)
+    {
+        angle = 0f;
+        int found = 0;
+
+        foreach (Vector2Int direction in Directions)
+        {
+            Vector2Int neighbor = new Vector2Int(x, y) + direction;
+
+            if (!InBounds(neighbor) || grid[Index(neighbor)] != type)
+            {
+                continue;
+            }
+
+            found++;
+
+            if (direction == Vector2Int.down) angle = 0f;
+            else if (direction == Vector2Int.right) angle = 90f;
+            else if (direction == Vector2Int.up) angle = 180f;
+            else angle = 270f;
+        }
+
+        return found == 1;
+    }
+
+    // Po zmianie kałuży sąsiednie pola mogą zmienić wygląd (środek zamienia się w brzeg i odwrotnie).
+    void RefreshPuddleNeighbors(Vector2Int cell)
+    {
+        foreach (Vector2Int direction in Directions)
+        {
+            Vector2Int neighbor = cell + direction;
+
+            if (InBounds(neighbor) && TileRules.IsPuddle(grid[Index(neighbor)]))
+            {
+                UpdateTileVisual(neighbor.x, neighbor.y);
+            }
+        }
     }
 
     static void SetTileIfDifferent(Tilemap tilemap, Vector3Int position, TileBase tile)
@@ -632,6 +742,7 @@ public class GridMap : MonoBehaviour
         {
             case TileType.Cookie:
                 blockLastHitBy[i] = null;
+                crackedBlock[i] = false;
                 grid[i] = TileType.Empty;
                 UpdateTileVisual(cell.x, cell.y);
                 GameAudio.Play(AudioEvent.BlockBreak, GridToWorld(cell));
@@ -639,6 +750,7 @@ public class GridMap : MonoBehaviour
                 break;
             case TileType.HeavyCookie:
                 blockLastHitBy[i] = source;
+                crackedBlock[i] = true;
                 grid[i] = TileType.Cookie;
                 UpdateTileVisual(cell.x, cell.y);
                 break;
@@ -657,14 +769,14 @@ public class GridMap : MonoBehaviour
 
     void SpreadPuddle(Vector2Int center, TileType puddleType, float duration)
     {
-        SetPuddle(center, puddleType, duration);
+        SetPuddle(center, puddleType, duration, true);
 
         foreach (Vector2Int direction in Directions)
         {
             Vector2Int neighbor = center + direction;
             if (InBounds(neighbor) && CanHoldPuddle(neighbor))
             {
-                SetPuddle(neighbor, puddleType, duration);
+                SetPuddle(neighbor, puddleType, duration, false);
             }
         }
     }
@@ -675,15 +787,17 @@ public class GridMap : MonoBehaviour
         return type == TileType.Empty || TileRules.IsPuddle(type);
     }
 
-    void SetPuddle(Vector2Int cell, TileType puddleType, float duration)
+    void SetPuddle(Vector2Int cell, TileType puddleType, float duration, bool isCenter)
     {
         nextPuddleToken++;
         int token = nextPuddleToken;
         int i = Index(cell);
 
         puddleToken[i] = token;
+        puddleIsCenter[i] = isCenter;
         grid[i] = puddleType;
         UpdateTileVisual(cell.x, cell.y);
+        RefreshPuddleNeighbors(cell);
 
         StartCoroutine(RemovePuddleAfterTime(cell, duration, token));
     }
@@ -698,7 +812,9 @@ public class GridMap : MonoBehaviour
         if (TileRules.IsPuddle(grid[i]))
         {
             grid[i] = TileType.Empty;
+            puddleIsCenter[i] = false;
             UpdateTileVisual(cell.x, cell.y);
+            RefreshPuddleNeighbors(cell);
         }
     }
 
@@ -745,6 +861,42 @@ public class GridMap : MonoBehaviour
         blockLastHitBy[i] = null;
         DestroyBlock(cell);
         return true;
+    }
+
+    // Poczekalnia: mały pokój pośrodku areny. Wszystko poza pokojem to ściana, w środku pusto i kilka filarów dla klimatu.
+    public void BuildLobbyRoom(RectInt room)
+    {
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                int i = Index(x, y);
+                bool inside = room.Contains(new Vector2Int(x, y));
+
+                grid[i] = inside ? TileType.Empty : TileType.SolidWall;
+                bombs[i] = false;
+                fire[i] = 0;
+                puddleIsCenter[i] = false;
+                crackedBlock[i] = false;
+                blockLastHitBy[i] = null;
+                UpdateTileVisual(x, y);
+            }
+        }
+
+        // filary w czterech miejscach pokoju
+        Vector2Int[] pillars =
+        {
+            new Vector2Int(room.xMin + 2, room.yMin + 2),
+            new Vector2Int(room.xMax - 3, room.yMin + 2),
+            new Vector2Int(room.xMin + 2, room.yMax - 3),
+            new Vector2Int(room.xMax - 3, room.yMax - 3)
+        };
+
+        foreach (Vector2Int pillar in pillars)
+        {
+            grid[Index(pillar)] = TileType.Pillar;
+            UpdateTileVisual(pillar.x, pillar.y);
+        }
     }
 
     public bool CanEnter(Vector2Int cell)

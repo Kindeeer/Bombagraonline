@@ -92,6 +92,13 @@ public class ArenaCamera : MonoBehaviour
         }
     }
 
+    // Po teleporcie gracza kamera ma od razu stanąć nad jego nowym miejscem (bez płynnego dojeżdżania przez pół planszy).
+    public void SnapToPlayer()
+    {
+        hasSmoothTarget = false;
+        smoothVelocity = Vector2.zero;
+    }
+
     // Przełącza między widokiem średnim a bliskim (przycisk CAM). Cała plansza jest tylko na starcie rundy,
     // więc jeśli kamera akurat ją pokazuje, przejdzie do widoku średniego.
     public void CycleMode()

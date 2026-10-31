@@ -18,7 +18,7 @@ using UnityEngine.InputSystem;
 // Obiekty szukane są po nazwach (Page_*, Button_*, Row_*), więc ich nazw nie zmieniaj, a resztę (pozycje, kolory,
 // sprite'y, napisy) możesz edytować dowolnie.
 // Grafiki z GameArt (sekcja "Menu główne": tło, logo, przyciski, karty) nadpisują sprite'y z Canvasu, gdy są wpisane.
-public class MainMenu : MonoBehaviour
+public partial class MainMenu : MonoBehaviour
 {
     public static bool IsOpen { get; private set; }
 
@@ -52,7 +52,7 @@ public class MainMenu : MonoBehaviour
     }
 
     // Czy tryb wieloosobowy jest dostępny (na razie nie: multiplayer robimy na końcu).
-    public static bool MultiplayerAvailable => false;
+    public static bool MultiplayerAvailable => true;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
@@ -99,6 +99,9 @@ public class MainMenu : MonoBehaviour
     // Wraca do menu głównego (np. z menu debug): wczytuje scenę od nowa i pokazuje menu.
     public static void ReturnToMenu()
     {
+        GameRules.Reset();
+        LobbyState.End();
+        OnlineSession.LeaveAsync();
         GameStarted = false;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
@@ -110,6 +113,10 @@ public class MainMenu : MonoBehaviour
         Bots,
         Settings,
         Skins,
+        Shop,
+        Edit,
+        Multi,
+        Join,
         Pause,
         PauseSettings
     }
@@ -142,6 +149,8 @@ public class MainMenu : MonoBehaviour
 
     void OnDestroy()
     {
+        Loc.Changed -= OnLanguageChanged;
+
         if (instance == this)
         {
             instance = null;
@@ -182,6 +191,9 @@ public class MainMenu : MonoBehaviour
             }
         }
 
+        BuildShop();
+        BuildMultiplayerPages();
+
         Transform grid = FindDeep(transform, "Grid");
         skinGrid = grid != null ? (RectTransform)grid : null;
 
@@ -191,6 +203,10 @@ public class MainMenu : MonoBehaviour
         EnsureButtonFx();
         ApplyArt();
         Bind();
+
+        // język: flagi w rogu i tłumaczenie napisów ze sceny (napisy ustawiane z kodu są pominięte)
+        BuildLanguagePickers();
+        Loc.BindTexts(transform, editTitle);
     }
 
     // Menu zbudowane w Hierarchii mogło mieć uszkodzony efekt przycisków (po przeniesieniu klasy ButtonFx do osobnego pliku).
@@ -318,6 +334,18 @@ public class MainMenu : MonoBehaviour
     {
         Wire("Button_Play", () => ShowPage(Page.Mode));
         Wire("Button_Skins", () => ShowPage(Page.Skins));
+        Wire("Button_Shop", () => ShowPage(Page.Shop));
+        Wire("Button_Edit", () => ShowPage(Page.Edit));
+        Wire("Button_Multi", () => ShowPage(Page.Multi));
+        Wire("Button_OpenChest", OpenChestClicked);
+        Wire("Button_FreeCoins", () =>
+        {
+            PlayerWallet.AddCoins(100);
+            GameAudio.Play(AudioEvent.CoinGain);
+            RefreshShop();
+        });
+        Wire("Button_ChestEquip", () => { equipAfterOpen = true; resultChosen = true; });
+        Wire("Button_ChestOk", () => { equipAfterOpen = false; resultChosen = true; });
         Wire("Button_Settings", () => ShowPage(Page.Settings));
         Wire("Button_Solo", () => ShowPage(Page.Bots));
         Wire("Button_Bots1", () => StartGame(1));
@@ -510,6 +538,10 @@ public class MainMenu : MonoBehaviour
 
     void StartGame(int bots)
     {
+        // zwykła gra z botami: domyślne reguły, bez poczekalni
+        GameRules.Reset();
+        LobbyState.End();
+
         botCount = Mathf.Clamp(bots, MinBots, MaxBots);
         PlayerPrefs.SetInt(BotCountKey, botCount);
         PlayerPrefs.Save();
@@ -529,7 +561,21 @@ public class MainMenu : MonoBehaviour
             case Page.Mode:
             case Page.Settings:
             case Page.Skins:
-                ShowPage(Page.Main);
+            case Page.Shop:
+                if (!chestBusy)
+                {
+                    ShowPage(Page.Main);
+                }
+
+                break;
+            case Page.Edit:
+                ShowPage(Page.Skins);
+                break;
+            case Page.Multi:
+                ShowPage(Page.Mode);
+                break;
+            case Page.Join:
+                ShowPage(Page.Multi);
                 break;
             case Page.Pause:
                 ClosePause();
@@ -543,6 +589,7 @@ public class MainMenu : MonoBehaviour
     void ShowPage(Page page)
     {
         current = page;
+        CollapsePickers();
 
         foreach (KeyValuePair<Page, RectTransform> entry in pages)
         {
@@ -564,6 +611,18 @@ public class MainMenu : MonoBehaviour
         else if (page == Page.Skins)
         {
             RebuildSkins();
+        }
+        else if (page == Page.Shop)
+        {
+            RefreshShop();
+        }
+        else if (page == Page.Edit)
+        {
+            RefreshEdit();
+        }
+        else if (page == Page.Multi || page == Page.Join)
+        {
+            RefreshMultiplayer();
         }
     }
 
@@ -628,7 +687,7 @@ public class MainMenu : MonoBehaviour
 
         if (art == null || art.SkinCount == 0)
         {
-            TextMeshProUGUI empty = NewText(skinGrid, "Brak skinów. Dodaj je w obiekcie GameArt (lista Skiny postaci).",
+            TextMeshProUGUI empty = NewText(skinGrid, Loc.T("menu.noskins"),
                 48f, MenuBuilder.CardColor, TextAlignmentOptions.Center);
             empty.name = "EmptyInfo";
             empty.gameObject.AddComponent<LayoutElement>().preferredHeight = 200f;
@@ -671,11 +730,14 @@ public class MainMenu : MonoBehaviour
         }
 
         Image preview = card.transform.Find("Preview").GetComponent<Image>();
-        Sprite sprite = skin.Portrait != null ? skin.Portrait : skin.Front;
+        // w karcie pokazujemy postać od przodu, a gdy skin jej nie ma, buźkę
+        PlayerSprites shown = art.SkinLook(index, PlayerWallet.Equipped(skin.label)) ?? skin;
+        Sprite sprite = shown.Front != null ? shown.Front : shown.Portrait;
         preview.sprite = sprite != null ? sprite : PickupArt.Face(false);
+        preview.preserveAspect = true;
 
         TextMeshProUGUI nameText = card.transform.Find("Name").GetComponent<TextMeshProUGUI>();
-        nameText.text = string.IsNullOrWhiteSpace(skin.label) ? "Skin " + (index + 1) : skin.label;
+        nameText.text = string.IsNullOrWhiteSpace(skin.label) ? "Skin " + (index + 1) : Loc.SkinName(skin.label);
 
         TextMeshProUGUI tag = card.transform.Find("Tag").GetComponent<TextMeshProUGUI>();
 
@@ -692,7 +754,7 @@ public class MainMenu : MonoBehaviour
         {
             bool selected = Mathf.Clamp(SkinSelection.Index, 0, art.SkinCount - 1) == index;
             cardImage.color = selected ? new Color(0.62f, 0.92f, 0.62f, 1f) : normalColor;
-            tag.text = selected ? "WYBRANY" : "";
+            tag.text = selected ? Loc.T("skin.selected") : "";
         });
     }
 

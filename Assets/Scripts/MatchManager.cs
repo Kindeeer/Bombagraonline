@@ -113,7 +113,7 @@ public class MatchManager : MonoBehaviour
 
     public static string NameOf(Combatant combatant)
     {
-        return combatant.isBot ? "BOT " + combatant.slot : "YOU";
+        return combatant.isBot ? Loc.F("hud.bot", combatant.slot) : (GameRules.Custom || LobbyState.InLobby ? PlayerProfile.Nick : Loc.T("hud.you"));
     }
 
     // Grafiki gracza ze slotu z obiektu GameArt (null, gdy w scenie nie ma GameArt).
@@ -183,6 +183,19 @@ public class MatchManager : MonoBehaviour
         roundClock = 0f;
         Register(human, 0, false);
 
+        // runda z poczekalni: czas do CHAOS z ustawień hosta (największa wartość = CHAOS wyłączony)
+        if (GameRules.Custom)
+        {
+            chaosEnabled = GameRules.Current.chaosSeconds < LobbySettings.ChaosOff;
+            chaosAfterSeconds = GameRules.Current.chaosSeconds;
+        }
+
+        // strzałki z buźkami graczy, którzy są poza kadrem
+        if (FindAnyObjectByType<OffscreenIndicators>() == null)
+        {
+            gameObject.AddComponent<OffscreenIndicators>();
+        }
+
         // menu główne: boty pojawiają się dopiero po wyborze trybu (liczbę wybiera gracz), a skiny po wyborze skina
         bool menu = showMainMenu && MainMenu.ShouldShow;
 
@@ -204,6 +217,14 @@ public class MatchManager : MonoBehaviour
 
     void SpawnBots(PlayerHealth human, int count)
     {
+        // każda runda losuje boty od nowa: inne zwierzaki, żadnych dwóch takich samych
+        GameArt art = GameArt.Instance;
+
+        if (art != null)
+        {
+            art.ShuffleBotSkins();
+        }
+
         for (int slot = 1; slot <= count && slot < MaxSlots; slot++)
         {
             SpawnBot(human, slot);
@@ -213,6 +234,15 @@ public class MatchManager : MonoBehaviour
     // Wpisuje w każdą postać jej skin (GameArt) i odcień slotu bota. Wołane przy starcie i po wyborze w menu.
     void ApplyLooks()
     {
+        // startowe statystyki, rozmiar i prędkość z ustawień poczekalni (puste w zwykłej grze)
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant != null && combatant.health != null)
+            {
+                GameRules.ApplyToPlayer(combatant.health.gameObject, combatant.isBot ? botSpeedMultiplier : 1f);
+            }
+        }
+
         foreach (Combatant combatant in Slots)
         {
             if (combatant == null || combatant.health == null)
@@ -266,6 +296,21 @@ public class MatchManager : MonoBehaviour
                 yield return null;
             }
 
+            // multiplayer: najpierw poczekalnia, a rundę zaczyna host przyciskiem START
+            if (LobbyState.InLobby)
+            {
+                InputLocked = false;
+                ApplyLooks();
+                LobbyController.Begin(human);
+
+                if (arenaCamera != null)
+                {
+                    arenaCamera.SetMode(ArenaCamera.ViewMode.Medium, true);
+                }
+
+                yield break;
+            }
+
             SpawnBots(human, MainMenu.BotCount);
             ApplyLooks();
         }
@@ -287,7 +332,7 @@ public class MatchManager : MonoBehaviour
         // jedna klatka na ustawienie kamery i postaci
         yield return null;
         GameAudio.Play(AudioEvent.RoundReady);
-        yield return intro.Show("READY", readyColor, readySeconds);
+        yield return intro.Show(Loc.T("round.ready"), readyColor, readySeconds);
 
         InputLocked = false;
 
@@ -297,7 +342,7 @@ public class MatchManager : MonoBehaviour
         }
 
         GameAudio.Play(AudioEvent.RoundGo);
-        yield return intro.Show("GO!", goColor, goSeconds);
+        yield return intro.Show(Loc.T("round.go"), goColor, goSeconds);
         Destroy(intro.gameObject);
     }
 
@@ -412,7 +457,7 @@ public class MatchManager : MonoBehaviour
     IEnumerator ChaosBanner()
     {
         RoundIntro banner = RoundIntro.Create();
-        yield return banner.Show("DOUBLE BUFFS,\nCHAOS!", chaosColor, 2.6f, 150f);
+        yield return banner.Show(Loc.T("round.chaos"), chaosColor, 2.6f, 150f);
         Destroy(banner.gameObject);
     }
 
@@ -426,7 +471,15 @@ public class MatchManager : MonoBehaviour
         }
 
         GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
-        banner = winner == null ? (scorePoint ? "DRAW" : "") : NameOf(winner) + " WINS THE ROUND";
+        banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "") : Loc.F("round.wins", NameOf(winner));
+
+        // moneta za wygraną rundę (tylko dla człowieka, bot nie zbiera)
+        if (winner != null && scorePoint && !winner.isBot)
+        {
+            PlayerWallet.AddCoins(PlayerWallet.WinReward);
+            GameAudio.Play(AudioEvent.CoinGain);
+            banner += "\n" + Loc.F("round.coins", PlayerWallet.WinReward);
+        }
         Invoke(nameof(Restart), restartDelay);
     }
 

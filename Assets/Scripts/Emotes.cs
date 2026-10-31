@@ -34,10 +34,10 @@ public static class Emotes
     {
         switch (emote)
         {
-            case Emote.Angry: return "Zły";
-            case Emote.Laugh: return "Śmiech";
-            case Emote.Cry: return "Płacz";
-            default: return "Super";
+            case Emote.Angry: return Loc.T("emote.angry");
+            case Emote.Laugh: return Loc.T("emote.laugh");
+            case Emote.Cry: return Loc.T("emote.cry");
+            default: return Loc.T("emote.like");
         }
     }
 

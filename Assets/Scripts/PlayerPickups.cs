@@ -149,8 +149,50 @@ public class PlayerPickups : MonoBehaviour
             return;
         }
 
-        Apply(item.Definition);
+        ApplyCollected(item.Definition);
         item.Collect();
+    }
+
+    // Przedmiot podniesiony z planszy. Klątwa odwracająca sterowanie nie trafia do tego, kto ją podniósł, tylko do losowego
+    // żywego gracza (może to być też on sam). Fioletowy okrąg pokazuje, kto ją dostał.
+    void ApplyCollected(PickupDefinition definition)
+    {
+        if (definition != null && definition.effect == PickupEffect.ReverseControls)
+        {
+            PlayerPickups victim = RandomLivingPlayer();
+
+            if (victim != null && victim != this)
+            {
+                GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+                PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+                victim.Apply(definition);
+                return;
+            }
+        }
+
+        Apply(definition);
+    }
+
+    static PlayerPickups RandomLivingPlayer()
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (match == null)
+        {
+            return null;
+        }
+
+        List<PlayerPickups> alive = new List<PlayerPickups>();
+
+        foreach (Combatant combatant in match.Slots)
+        {
+            if (combatant != null && combatant.IsAlive && combatant.pickups != null)
+            {
+                alive.Add(combatant.pickups);
+            }
+        }
+
+        return alive.Count > 0 ? alive[Random.Range(0, alive.Count)] : null;
     }
 
     public void Apply(PickupDefinition definition)
@@ -536,6 +578,20 @@ public class PlayerPickups : MonoBehaviour
 
         PickupFx.Spawn(item.Icon, transform.position + Vector3.up * 0.6f, 0.6f, 1.6f, Color.white, 0.5f, 5);
         PickupFx.Spawn(item.Icon, target.position + Vector3.up * 0.6f, 0.6f, 1.6f, Color.white, 0.5f, 5);
+
+        // czerwone kręgi jak po wpadnięciu kropli do wody pokazują, gdzie wylądowali oboje
+        Color red = new Color(1f, 0.18f, 0.18f, 1f);
+        PulseRing.Spawn(transform.position, red);
+        PulseRing.Spawn(target.position, red);
+
+        // kamera od razu jedzie za graczem, zamiast wolno doganiać go po skoku przez pół planszy
+        ArenaCamera arenaCamera = FindAnyObjectByType<ArenaCamera>();
+
+        if (arenaCamera != null)
+        {
+            arenaCamera.SnapToPlayer();
+        }
+
         return true;
     }
 
