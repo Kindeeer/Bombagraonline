@@ -113,7 +113,10 @@ public static class PickupArt
         });
     }
 
-    // Bąbelek o średnicy około 0,92 jednostki.
+    static Sprite bubbleSprite;
+
+    // Bąbelek o średnicy około 0,92 jednostki: grafika Assets/Resources/PickupBubble.png (236 px przy 256 pikselach na jednostkę).
+    // Slot "Pickup Bubble" w GameArt (albo w motywie) ma pierwszeństwo, gdyby chciał go podmienić grafik.
     public static Sprite Bubble()
     {
         Sprite custom = Custom(a => a.PickupBubbleSprite);
@@ -123,13 +126,12 @@ public static class PickupArt
             return custom;
         }
 
-        return Build("bubble", 96, 96, 104f, new Vector2(0.5f, 0.5f), (l, x, y) =>
+        if (bubbleSprite == null)
         {
-            l.Draw(Circle(x, y, 48f, 48f, 45f), new Color(0.72f, 0.92f, 1f, 0.30f));
-            l.Draw(Mathf.Abs(Circle(x, y, 48f, 48f, 44f)) - 1.8f, new Color(1f, 1f, 1f, 0.9f));
-            l.Draw(Ellipse(x, y, 33f, 66f, 10f, 6f), new Color(1f, 1f, 1f, 0.85f));
-            l.Draw(Circle(x, y, 63f, 30f, 3f), new Color(1f, 1f, 1f, 0.5f));
-        });
+            bubbleSprite = Resources.Load<Sprite>("PickupBubble");
+        }
+
+        return bubbleSprite;
     }
 
     // Ikona zastępcza o średnicy około 0,6 jednostki. None zwraca null (bąbelek bez ikony).
