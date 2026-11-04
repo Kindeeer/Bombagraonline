@@ -377,7 +377,7 @@ public class GridMap : MonoBehaviour
 
         Tilemap ground = null;
 
-        foreach (Tilemap candidate in FindObjectsByType<Tilemap>())
+        foreach (Tilemap candidate in FindObjectsByType<Tilemap>(FindObjectsSortMode.None))
         {
             if (candidate.name == "Ground")
             {

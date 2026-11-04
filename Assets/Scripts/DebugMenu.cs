@@ -833,7 +833,7 @@ public class DebugMenu : MonoBehaviour
 
     static void RemoveAllPickups()
     {
-        foreach (PickupItem item in FindObjectsByType<PickupItem>())
+        foreach (PickupItem item in FindObjectsByType<PickupItem>(FindObjectsSortMode.None))
         {
             item.Collect();
         }
