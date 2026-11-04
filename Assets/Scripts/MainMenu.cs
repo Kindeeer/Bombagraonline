@@ -101,6 +101,8 @@ public partial class MainMenu : MonoBehaviour
     {
         GameRules.Reset();
         LobbyState.End();
+        OnlineMatch.SendLeave();
+        OnlineMatch.End();
         OnlineSession.LeaveAsync();
         GameStarted = false;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);

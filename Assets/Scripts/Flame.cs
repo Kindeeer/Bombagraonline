@@ -13,7 +13,7 @@ public class Flame : MonoBehaviour
     bool active;
     bool sortingApplied;
 
-    public void Init(Vector2Int flameCell)
+    public void Init(Vector2Int flameCell, int ownerSlot = -1)
     {
         if (!sortingApplied)
         {
@@ -41,7 +41,7 @@ public class Flame : MonoBehaviour
         active = true;
 
         transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * sortOffsetY;
-        GridMap.Instance.AddFire(cell);
+        GridMap.Instance.AddFire(cell, ownerSlot);
     }
 
     void Update()

@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Tilemaps;
 using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -78,15 +79,17 @@ public class NukeTargeting : MonoBehaviour
 
         GameObject area = new GameObject("TargetArea");
         area.transform.SetParent(transform, false);
-        area.transform.localScale = Vector3.one * (Nuke.BlastRadius * 2 + 1);
         marker = area.AddComponent<SpriteRenderer>();
         marker.sprite = Nuke.SquareSprite();
-        marker.sortingOrder = 2;
+
+        // nad blokami i przedmiotami, żeby czerwony obszar był równy, a nie dziurawy
+        marker.sortingOrder = 8;
         marker.color = new Color(1f, 0.15f, 0.1f, 0.3f);
 
         // czerwony obszar 7 x 7 stoi na początku na środku mapy (a więc ekranu), dopóki gracz nie ruszy myszką
         targetCell = new Vector2Int(GridMap.Width / 2, GridMap.Height / 2);
-        marker.transform.position = GridMap.Instance.GridToWorld(targetCell);
+        Nuke.PlaceArea(marker.transform, targetCell);
+        Nuke.SpawnBorderOverlay(transform);
 
         BuildHint();
     }
@@ -158,7 +161,7 @@ public class NukeTargeting : MonoBehaviour
         if (onMap && !overUi && (pointerMoved || held))
         {
             targetCell = cell;
-            marker.transform.position = GridMap.Instance.GridToWorld(cell);
+            Nuke.PlaceArea(marker.transform, cell);
         }
     }
 

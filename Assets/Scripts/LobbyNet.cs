@@ -11,6 +11,8 @@ public class RemoteState
     public Vector2 position;
     public Facing facing;
     public bool moving;
+    // kiedy przyszedł ostatni stan (Time.unscaledTime)
+    public float time;
 }
 
 // Szybkie łącze ruchu w poczekalni (przez Relay). Każdy telefon kilkanaście razy na sekundę wysyła pozycję, kierunek i to,
@@ -54,6 +56,9 @@ public static class LobbyNet
         };
 
         go.SetActive(true);
+
+        // połączenie ma przetrwać wczytanie areny (start rundy online przeładowuje scenę)
+        Object.DontDestroyOnLoad(go);
     }
 
     public static bool Ready
@@ -129,6 +134,7 @@ public static class LobbyNet
         state.position = new Vector2(x, y);
         state.facing = (Facing)facing;
         state.moving = moving;
+        state.time = Time.unscaledTime;
 
         // host przekazuje stan od jednego klienta pozostałym
         NetworkManager manager = NetworkManager.Singleton;

@@ -8,6 +8,9 @@ public class BombController : MonoBehaviour
 {
     public Bomb bombPrefab;
 
+    // Numer slotu rundy, do którego należy ta postać (ustawia go MatchManager). Bomby pamiętają właściciela do liczenia zabójstw.
+    [System.NonSerialized] public int ownerSlot;
+
     // co ile sekund klątwa "biegunka bomb" zostawia bombę
     const float AutoBombInterval = 0.9f;
     float autoBombTimer;
@@ -150,6 +153,13 @@ public class BombController : MonoBehaviour
 
         Bomb bomb = Instantiate(bombPrefab);
         bomb.Init(cell, stats.fuseTime, Mathf.Max(1, range));
+        bomb.ownerSlot = ownerSlot;
+
+        // runda online: pozostali gracze stawiają taką samą bombę u siebie
+        if (OnlineMatch.Active && movement != null && movement.useKeyboard)
+        {
+            OnlineMatch.SendBomb(cell, Mathf.Max(1, range), stats.fuseTime);
+        }
 
         if (countsTowardLimit)
         {

@@ -113,6 +113,8 @@ public class GridMap : MonoBehaviour
     readonly bool[] reservedCells = new bool[CellCount];
     readonly bool[] bombs = new bool[CellCount];
     readonly int[] fire = new int[CellCount];
+    // kto podpalił pole (numer slotu właściciela bomby, -1 = nikt/nieznany), do liczenia zabójstw
+    readonly int[] fireOwner = new int[CellCount];
     readonly int[] puddleToken = new int[CellCount];
     readonly object[] blockLastHitBy = new object[CellCount];
 
@@ -206,6 +208,14 @@ public class GridMap : MonoBehaviour
             densityScale = Mathf.Clamp(densityScale * GameRules.Current.blocks, 0f, 1.5f);
         }
 
+        // runda online: wszyscy losują planszę z tego samego ziarna (od hosta), więc każdy dostaje identyczną arenę
+        Random.State savedRandom = Random.state;
+
+        if (OnlineMatch.Active)
+        {
+            Random.InitState(OnlineMatch.Seed);
+        }
+
         // 0. Jeśli są układy, losujemy jeden i malujemy go w tilemapie (z losowym odbiciem)
         if (layouts != null && layouts.Length > 0)
         {
@@ -233,6 +243,11 @@ public class GridMap : MonoBehaviour
         // 3. Ramka i ściany z układu też dostają losowe warianty, a podłoga układa się z wariantów
         ApplyVariantsToBlocks();
         ApplyFloorVariants();
+
+        if (OnlineMatch.Active)
+        {
+            Random.state = savedRandom;
+        }
     }
 
     // Dla każdego rodzaju kafelka, który ma w GameArt co najmniej dwa warianty, tworzymy po kafelku na wariant.
@@ -924,10 +939,15 @@ public class GridMap : MonoBehaviour
         if (InBounds(cell)) bombs[Index(cell)] = hasBomb;
     }
 
-    public void AddFire(Vector2Int cell)
+    public void AddFire(Vector2Int cell, int owner = -1)
     {
-        if (InBounds(cell)) fire[Index(cell)]++;
+        if (!InBounds(cell)) return;
+
+        fire[Index(cell)]++;
+        fireOwner[Index(cell)] = owner;
     }
+
+    public int FireOwner(Vector2Int cell) => InBounds(cell) ? fireOwner[Index(cell)] : -1;
 
     public void RemoveFire(Vector2Int cell)
     {

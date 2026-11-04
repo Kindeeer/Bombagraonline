@@ -52,12 +52,50 @@ public class PickupSpawner : MonoBehaviour
 
     void OnBlockDestroyed(Vector2Int cell, TileType type)
     {
+        // runda online: przedmioty losuje tylko host, a reszta dostaje od niego wiadomość, co i gdzie leży
+        if (OnlineMatch.Active && !OnlineMatch.IsHost)
+        {
+            return;
+        }
+
         if (table == null || Random.value >= table.blockDropChance * GameRules.DropChanceMultiplier)
         {
             return;
         }
 
-        SpawnOnGround(table.PickFromBlocks(), cell);
+        PickupDefinition definition = table.PickFromBlocks();
+
+        if (SpawnOnGround(definition, cell) != null && OnlineMatch.Active)
+        {
+            OnlineMatch.SendPickup(definition.name, cell, false);
+        }
+    }
+
+    // Przedmiot, który host wylosował i opisał wiadomością.
+    public void SpawnFromNetwork(string definitionName, Vector2Int cell, bool bubble)
+    {
+        if (table == null)
+        {
+            return;
+        }
+
+        PickupDefinition definition = table.items.Find(item => item != null && item.name == definitionName);
+
+        if (definition == null)
+        {
+            return;
+        }
+
+        ChocolateFountain fountain = bubble ? FindAnyObjectByType<ChocolateFountain>() : null;
+
+        if (fountain != null)
+        {
+            LaunchBubble(definition, cell, fountain.transform.position + Vector3.up * 1.5f, 0.9f, 1.5f);
+        }
+        else
+        {
+            SpawnOnGround(definition, cell);
+        }
     }
 
     public PickupDefinition PickFromFountain()

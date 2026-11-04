@@ -16,6 +16,9 @@ public static class PlayerWallet
     const string OwnedKey = "chromas_owned";
     const string EquippedKey = "chroma_equipped_";
 
+    // Górna granica monet. Zapisujemy je jako int (max ok. 2,1 mld), więc zostawiamy duży zapas i nie ma przepełnienia.
+    public const int MaxCoins = 999_999_999;
+
     static int coins = -1;
     static HashSet<string> owned;
 
@@ -74,10 +77,38 @@ public static class PlayerWallet
             return;
         }
 
-        coins = Coins + amount;
+        coins = (int)Math.Min((long)Coins + amount, MaxCoins);
         PlayerPrefs.SetInt(CoinsKey, coins);
         PlayerPrefs.Save();
         Changed?.Invoke();
+    }
+
+    // Krótki zapis liczby monet: do 9 999 pełna liczba (500, 9 999), potem 10K, 12.5K, 1.2M, 3.4B.
+    public static string Format(int value)
+    {
+        if (value < 10_000)
+        {
+            return value.ToString();
+        }
+
+        if (value < 1_000_000)
+        {
+            return Trim(value / 1000f) + "K";
+        }
+
+        if (value < 1_000_000_000)
+        {
+            return Trim(value / 1_000_000f) + "M";
+        }
+
+        return Trim(value / 1_000_000_000f) + "B";
+    }
+
+    // Jedno miejsce po przecinku, bez zbędnego ".0" (12.0 -> 12, 12.54 -> 12.5).
+    static string Trim(float value)
+    {
+        value = Mathf.Floor(value * 10f) / 10f;
+        return value.ToString(value >= 100f || Mathf.Approximately(value, Mathf.Round(value)) ? "0" : "0.0", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     public static bool TrySpend(int amount)

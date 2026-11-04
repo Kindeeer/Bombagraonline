@@ -235,6 +235,7 @@ public class GameHud : MonoBehaviour
             shownCount = -1;
         }
 
+        UpdateMapFrame();
         UpdatePlayers(match);
         UpdateCrown(match);
         UpdateBuff();
@@ -842,6 +843,7 @@ public class GameHud : MonoBehaviour
 
     const string BackdropName = "Backdrop";
     const string MapFrameName = "MapFrame";
+    const float FrameOverlap = 12f;
 
     Image leftBackdrop;
     Image rightBackdrop;
@@ -926,9 +928,10 @@ public class GameHud : MonoBehaviour
             {
                 mapFrameImage.sprite = art.hudMapFrameSprite;
             }
-            else if (mapFrameImage.sprite == null)
+            else
             {
-                mapFrameImage.sprite = UiKit.RoundedSprite();
+                // ramka wokół areny ma ostre rogi, żeby w narożnikach nic nie prześwitywało
+                mapFrameImage.sprite = UiKit.SquareSprite();
             }
 
             mapFrameImage.type = Image.Type.Sliced;
@@ -949,9 +952,13 @@ public class GameHud : MonoBehaviour
 
         RectTransform rect = mapFrameImage.rectTransform;
         rect.anchorMin = new Vector2(leftPanel.anchorMax.x, 0f);
-        rect.anchorMax = new Vector2(rightPanel.anchorMin.x, 1f);
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
+        // w poczekalni prawy panel HUD jest wyłączony, a ramka kończy się tam, gdzie zaczyna się panel zasad
+        float right = LobbyState.InLobby ? Mathf.Min(rightPanel.anchorMin.x, LobbyController.PanelStartFraction) : rightPanel.anchorMin.x;
+        rect.anchorMax = new Vector2(right, 1f);
+
+        // ramka zachodzi odrobinę pod panele boczne (rysują się na niej), żeby między nią a panelami nie było szparki
+        rect.offsetMin = new Vector2(-FrameOverlap, 0f);
+        rect.offsetMax = new Vector2(FrameOverlap, 0f);
     }
 
     // ---------- Zębatka (pauza) ----------

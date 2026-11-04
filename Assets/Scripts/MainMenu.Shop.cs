@@ -548,7 +548,7 @@ public partial class MainMenu
         int missing = art != null ? PlayerWallet.MissingCount(art, chest) : 0;
         bool all = missing == 0;
 
-        shopCoinText.text = PlayerWallet.Coins.ToString();
+        shopCoinText.text = PlayerWallet.Format(PlayerWallet.Coins);
         collectionText.text = Loc.F("shop.collected", total - missing, total);
         openChestLabel.text = all ? Loc.T("shop.all") : Loc.F("shop.open", chest.price);
 

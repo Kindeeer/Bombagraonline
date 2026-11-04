@@ -150,10 +150,16 @@ public class OffscreenIndicators : MonoBehaviour
         Vector2 position = center + direction * scale;
 
         marker.root.gameObject.SetActive(true);
-        marker.root.anchorMin = marker.root.anchorMax = Vector2.zero;
+
+        // położenie liczymy w pikselach ekranu i ustawiamy je przez pozycję w świecie canvasu (to nie zależy od rozmiaru
+        // głównego RectTransform canvasu, który w tej wersji Unity bywa równy 100 x 100); rozmiar przeliczamy przez skalę canvasu
+        float canvasScale = Mathf.Max(0.01f, canvasRect.GetComponent<Canvas>().scaleFactor);
+
+        marker.root.anchorMin = marker.root.anchorMax = new Vector2(0.5f, 0.5f);
         marker.root.pivot = new Vector2(0.5f, 0.5f);
-        marker.root.anchoredPosition = position;
-        marker.root.sizeDelta = new Vector2(size, size);
+        marker.root.position = new Vector3(position.x, position.y, 0f);
+        float unitSize = size / canvasScale;
+        marker.root.sizeDelta = new Vector2(unitSize, unitSize);
 
         Color slotColor = slot < match.slotColors.Length ? match.slotColors[slot] : Color.white;
         GameArt art = GameArt.Instance;
@@ -168,9 +174,9 @@ public class OffscreenIndicators : MonoBehaviour
 
         // strzałka za buźką, wskazuje kierunek do gracza
         Vector2 unit = direction.normalized;
-        float arrowSize = size * 0.5f;
+        float arrowSize = unitSize * 0.5f;
 
-        marker.arrowPivot.anchoredPosition = unit * size * 0.72f;
+        marker.arrowPivot.anchoredPosition = unit * unitSize * 0.72f;
         marker.arrowPivot.sizeDelta = new Vector2(arrowSize, arrowSize);
         marker.arrowPivot.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(unit.y, unit.x) * Mathf.Rad2Deg - 90f);
 

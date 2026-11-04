@@ -153,15 +153,15 @@ public class PlayerPickups : MonoBehaviour
         item.Collect();
     }
 
-    // Przedmiot podniesiony z planszy. Klątwa odwracająca sterowanie nie trafia do tego, kto ją podniósł, tylko do losowego
-    // żywego gracza (może to być też on sam). Fioletowy okrąg pokazuje, kto ją dostał.
+    // Przedmiot podniesiony z planszy. Klątwa odwracająca sterowanie nie trafia do tego, kto ją podniósł, tylko do najbliższego
+    // żywego przeciwnika. Fioletowy okrąg pokazuje, kto ją dostał. Gdy nie ma żadnego przeciwnika, dostaje ją sam podnoszący.
     void ApplyCollected(PickupDefinition definition)
     {
         if (definition != null && definition.effect == PickupEffect.ReverseControls)
         {
-            PlayerPickups victim = RandomLivingPlayer();
+            PlayerPickups victim = NearestLivingOpponent();
 
-            if (victim != null && victim != this)
+            if (victim != null)
             {
                 GameAudio.Play(AudioEvent.PickupCollect, transform.position);
                 PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
@@ -173,7 +173,7 @@ public class PlayerPickups : MonoBehaviour
         Apply(definition);
     }
 
-    static PlayerPickups RandomLivingPlayer()
+    PlayerPickups NearestLivingOpponent()
     {
         MatchManager match = MatchManager.Instance;
 
@@ -182,17 +182,26 @@ public class PlayerPickups : MonoBehaviour
             return null;
         }
 
-        List<PlayerPickups> alive = new List<PlayerPickups>();
+        PlayerPickups nearest = null;
+        float best = float.MaxValue;
 
         foreach (Combatant combatant in match.Slots)
         {
-            if (combatant != null && combatant.IsAlive && combatant.pickups != null)
+            if (combatant == null || !combatant.IsAlive || combatant.pickups == null || combatant.pickups == this)
             {
-                alive.Add(combatant.pickups);
+                continue;
+            }
+
+            float distance = (combatant.pickups.transform.position - transform.position).sqrMagnitude;
+
+            if (distance < best)
+            {
+                best = distance;
+                nearest = combatant.pickups;
             }
         }
 
-        return alive.Count > 0 ? alive[Random.Range(0, alive.Count)] : null;
+        return nearest;
     }
 
     public void Apply(PickupDefinition definition)

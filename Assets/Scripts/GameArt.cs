@@ -235,6 +235,17 @@ public class GameArt : MonoBehaviour
     // boty dostają pozostałe skiny po kolei. Zwraca null, gdy skinów nie ma.
     public PlayerSprites PlayerFor(int slot)
     {
+        // runda online: pozostali gracze wyglądają tak, jak wybrali u siebie (skin i założona chroma)
+        if (slot > 0 && OnlineMatch.Active)
+        {
+            PlayerSprites remote = OnlineMatch.LookForSlot(this, slot);
+
+            if (remote != null)
+            {
+                return remote;
+            }
+        }
+
         int index = SkinIndexForSlot(slot);
 
         if (index < 0)

@@ -34,6 +34,9 @@ public class Bomb : MonoBehaviour
     }
 
     public event Action<Bomb> Exploded;
+
+    // Slot gracza, który postawił bombę (0 = ja, -1 = bot albo cudzy gracz). Płomienie to pamiętają, żeby liczyć zabójstwa.
+    [System.NonSerialized] public int ownerSlot = -1;
     public Vector2Int Cell { get; private set; }
     public int Range => range;
     public float TimeLeft => timeLeft;
@@ -260,7 +263,7 @@ public class Bomb : MonoBehaviour
         foreach (Vector2Int cell in blast.flameCells)
         {
             Flame flame = Instantiate(flamePrefab);
-            flame.Init(cell);
+            flame.Init(cell, ownerSlot);
         }
 
         foreach (Vector2Int cell in blast.blocksToDestroy)

@@ -258,6 +258,37 @@ public static class UiKit
         return roundedSprite;
     }
 
+    static Sprite squareSprite;
+
+    // Prostokąt z ostrymi rogami (9-slice o tej samej ramce co zaokrąglony), np. na ramkę wokół areny.
+    public static Sprite SquareSprite()
+    {
+        if (squareSprite != null)
+        {
+            return squareSprite;
+        }
+
+        int size = RoundedRadius * 2 + 2;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        Color[] pixels = new Color[size * size];
+
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = Color.white;
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply();
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        texture.hideFlags = HideFlags.HideAndDontSave;
+
+        squareSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
+            SpriteMeshType.FullRect, new Vector4(RoundedRadius, RoundedRadius, RoundedRadius, RoundedRadius));
+        squareSprite.hideFlags = HideFlags.HideAndDontSave;
+        return squareSprite;
+    }
+
     public static Sprite CircleSprite()
     {
         if (circleOverride != null)

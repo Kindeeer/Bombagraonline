@@ -14,6 +14,7 @@ public class LobbyController : MonoBehaviour
 {
     static readonly RectInt Room = new RectInt(3, 3, 11, 9);
     const float PanelStart = 0.70f;
+    public const float PanelStartFraction = PanelStart;
 
     static readonly Color PanelColor = new Color(0.28f, 0.09f, 0.21f, 0.97f);
     static readonly Color RowColor = new Color(0.97f, 0.84f, 0.68f, 0.95f);
@@ -239,6 +240,7 @@ public class LobbyController : MonoBehaviour
         if (OnlineSession.Connected && LobbyNet.Ready && humanMovement != null)
         {
             LobbyNet.EnsureHandler(Unity.Netcode.NetworkManager.Singleton);
+            OnlineMatch.EnsureHandlers();
             sendTimer -= Time.unscaledDeltaTime;
 
             if (sendTimer <= 0f)
@@ -957,6 +959,14 @@ public class LobbyController : MonoBehaviour
     {
         SaveIfDirty();
         LobbyState.SaveLast();
+
+        // przez internet: host zaczyna rundę dla wszystkich graczy z pokoju naraz
+        if (OnlineSession.Connected && LobbyState.IsHost && LobbyNet.Ready)
+        {
+            GameAudio.Play(AudioEvent.RoundGo);
+            OnlineMatch.HostStart(Settings);
+            return;
+        }
 
         GameRules.Use(Settings);
         MainMenu.SetBotCount(Settings.bots);

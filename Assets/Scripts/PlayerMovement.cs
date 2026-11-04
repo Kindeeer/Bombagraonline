@@ -37,6 +37,10 @@ public class PlayerMovement : MonoBehaviour
     // Postać stoi w miejscu (np. celuje atomówką), ale nadal żyje i da się ją trafić.
     [HideInInspector] public bool Frozen;
 
+    // Runda online: ta postać jest cudzym graczem. Nie steruje nią nikt lokalnie, tylko pozycja przysyłana przez sieć.
+    [HideInInspector] public bool networkDriven;
+    [HideInInspector] public string remoteId;
+
     public Facing Facing { get; private set; } = Facing.Down;
     public bool IsMoving { get; private set; }
 
@@ -52,8 +56,39 @@ public class PlayerMovement : MonoBehaviour
         transform.position = GridMap.Instance.GridToWorld(startCell);
     }
 
+    // Przenosi postać na środek pola (start rundy online: każdy gracz w swoim rogu).
+    public void WarpTo(Vector2Int cell)
+    {
+        startCell = cell;
+        currentCell = cell;
+        transform.position = GridMap.Instance.GridToWorld(cell);
+    }
+
+    // Cudza postać: płynnie dąży do ostatniej pozycji przysłanej przez sieć i pokazuje jej kierunek oraz chodzenie.
+    void UpdateRemote()
+    {
+        IsMoving = false;
+
+        if (remoteId == null || !LobbyNet.States.TryGetValue(remoteId, out RemoteState state) || state.time < OnlineMatch.RoundStartedAt)
+        {
+            return;
+        }
+
+        Vector3 target = new Vector3(state.position.x, state.position.y, transform.position.z);
+        transform.position = Vector3.Lerp(transform.position, target, 1f - Mathf.Exp(-14f * Time.deltaTime));
+        currentCell = GridMap.Instance.WorldToGrid(transform.position);
+        Facing = state.facing;
+        IsMoving = state.moving;
+    }
+
     void Update()
     {
+        if (networkDriven)
+        {
+            UpdateRemote();
+            return;
+        }
+
         // na starcie rundy (do napisu GO!) i podczas celowania atomówką postać stoi w miejscu
         if (MatchManager.InputLocked || Frozen)
         {

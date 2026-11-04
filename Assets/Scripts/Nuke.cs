@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 // Atomówka: spada z góry na wybrane pole (czerwony obszar pokazuje, gdzie wybuchnie) i robi ogromny wybuch kwadratem
 // (promień BlastRadius pól w każdą stronę). Niszczy bloki i zapala wszystkie pola, więc zabija każdego w zasięgu.
@@ -59,6 +60,68 @@ public class Nuke : MonoBehaviour
         go.AddComponent<Nuke>().Begin(cell, ownerSlot, bombPrefab, icon);
     }
 
+    // Ramka areny rysuje się nad czerwonym obszarem (ma wyższą warstwę niż on): kopiujemy jej kafelki jako zwykłe sprite'y
+    // na czas celowania. Dzięki temu czerwony obszar nie nachodzi na ramkę, a bloki w środku nadal są nim przykryte.
+    public static void SpawnBorderOverlay(Transform parent)
+    {
+        GridMap map = GridMap.Instance;
+        Tilemap tilemap = map != null ? map.blocksTilemap : null;
+
+        if (tilemap == null)
+        {
+            return;
+        }
+
+        TilemapRenderer source = tilemap.GetComponent<TilemapRenderer>();
+
+        for (int x = 0; x < GridMap.Width; x++)
+        {
+            for (int y = 0; y < GridMap.Height; y++)
+            {
+                bool border = x == 0 || y == 0 || x == GridMap.Width - 1 || y == GridMap.Height - 1;
+
+                if (!border)
+                {
+                    continue;
+                }
+
+                Vector3Int position = new Vector3Int(x, y, 0);
+                Sprite sprite = tilemap.GetSprite(position);
+
+                if (sprite == null)
+                {
+                    continue;
+                }
+
+                GameObject copy = new GameObject("BorderOverlay");
+                copy.transform.SetParent(parent, false);
+                copy.transform.position = tilemap.GetCellCenterWorld(position);
+
+                SpriteRenderer renderer = copy.AddComponent<SpriteRenderer>();
+                renderer.sprite = sprite;
+                renderer.color = tilemap.GetColor(position);
+                renderer.sortingLayerID = source != null ? source.sortingLayerID : 0;
+                renderer.sortingOrder = 9;
+            }
+        }
+    }
+
+    // Czerwony obszar 7 x 7 wokół pola. Przycinamy go do wnętrza areny, żeby nie nachodził na ramkę.
+    public static void PlaceArea(Transform area, Vector2Int cell)
+    {
+        int radius = Nuke.BlastRadius;
+        int minX = Mathf.Max(cell.x - radius, 1);
+        int maxX = Mathf.Min(cell.x + radius, GridMap.Width - 2);
+        int minY = Mathf.Max(cell.y - radius, 1);
+        int maxY = Mathf.Min(cell.y + radius, GridMap.Height - 2);
+
+        float width = Mathf.Max(1, maxX - minX + 1);
+        float height = Mathf.Max(1, maxY - minY + 1);
+
+        area.position = new Vector3((minX + maxX + 1) * 0.5f, (minY + maxY + 1) * 0.5f, 0f);
+        area.localScale = new Vector3(width, height, 1f);
+    }
+
     Vector2Int target;
     int ownerSlot;
     Bomb bombPrefab;
@@ -79,10 +142,11 @@ public class Nuke : MonoBehaviour
         // czerwony obszar wybuchu, miga coraz szybciej
         GameObject area = new GameObject("BlastArea");
         area.transform.SetParent(transform, false);
-        area.transform.localScale = Vector3.one * (BlastRadius * 2 + 1);
         marker = area.AddComponent<SpriteRenderer>();
         marker.sprite = SquareSprite();
-        marker.sortingOrder = 2;
+        marker.sortingOrder = 8;
+        PlaceArea(area.transform, cell);
+        SpawnBorderOverlay(transform);
         marker.color = new Color(1f, 0.15f, 0.1f, 0.25f);
 
         // pocisk spada z góry
