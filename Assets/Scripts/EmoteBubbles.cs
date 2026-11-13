@@ -8,7 +8,6 @@ public class EmoteBubbles : MonoBehaviour
     class Bubble
     {
         public Transform root;
-        public SpriteRenderer background;
         public SpriteRenderer icon;
         public float age;
         // dymek nad dowolnym obiektem (postacie innych graczy w poczekalni); null = nad graczem ze slotu rundy
@@ -52,7 +51,7 @@ public class EmoteBubbles : MonoBehaviour
 
         // każda grafika emotki, niezależnie od rozmiaru pliku, mieści się w dymku
         float extent = sprite != null ? Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y) : 1f;
-        bubble.icon.transform.localScale = Vector3.one * (Size * 0.72f / Mathf.Max(0.01f, extent));
+        bubble.icon.transform.localScale = Vector3.one * (Size / Mathf.Max(0.01f, extent));
 
         bubble.age = 0f;
         bubble.root.gameObject.SetActive(true);
@@ -64,13 +63,7 @@ public class EmoteBubbles : MonoBehaviour
         bubble.root = new GameObject("EmoteBubble_" + slot).transform;
         bubble.root.SetParent(transform, false);
 
-        bubble.background = NewRenderer(bubble.root, "Background", UiKit.CircleSprite(), 20);
-        bubble.background.color = new Color(1f, 1f, 1f, 0.95f);
-
-        Sprite circle = bubble.background.sprite;
-        float extent = circle != null ? circle.bounds.size.x : 1f;
-        bubble.background.transform.localScale = Vector3.one * (Size / Mathf.Max(0.01f, extent));
-
+        // sama emotka, bez tła (grafiki emotek mają własny kształt i obwódkę)
         bubble.icon = NewRenderer(bubble.root, "Icon", null, 21);
         return bubble;
     }
@@ -121,7 +114,6 @@ public class EmoteBubbles : MonoBehaviour
             bubble.root.position = new Vector3(position.x, position.y + HeadHeight + bob, 0f);
             bubble.root.localScale = Vector3.one * pop;
 
-            bubble.background.color = new Color(1f, 1f, 1f, 0.95f * alpha);
             bubble.icon.color = new Color(1f, 1f, 1f, alpha);
         }
     }
