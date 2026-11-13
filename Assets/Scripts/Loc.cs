@@ -160,6 +160,7 @@ public static class Loc
         { "pickup.CurseSnail", new[] { "Ślimak", "Snail" } },
         { "pickup.CurseFreeze", new[] { "Zamrożenie", "Freeze" } },
         { "pickup.PierceBomb", new[] { "Bomba przebijająca", "Piercing Bomb" } },
+        { "pickup.Mine", new[] { "Mina", "Mine" } },
         { "pickup.Example_Slowdown", new[] { "Spowolnienie", "Slowdown" } },
         { "pickup.ExtraBomb", new[] { "Dodatkowa bomba", "Extra Bomb" } },
         { "pickup.Hammer", new[] { "Młotek", "Hammer" } },

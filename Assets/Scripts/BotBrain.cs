@@ -401,6 +401,18 @@ public class BotBrain : MonoBehaviour
             return false;
         }
 
+        // mina: bot zostawia ją za sobą w losowym momencie (czasem trafi w przejście, którym chodzą przeciwnicy)
+        if (pickups.HeldItem.special == SpecialItem.Mine)
+        {
+            if (UnityEngine.Random.value < 0.05f && !Mine.Has(cell))
+            {
+                specialCooldownUntil = Time.time + 1f;
+                pickups.UseSpecial();
+            }
+
+            return false;
+        }
+
         // atomówka: bot zrzuca ją na przeciwnika, który stoi dość daleko, żeby wybuch nie trafił też bota
         if (pickups.HeldItem.special == SpecialItem.Nuke)
         {

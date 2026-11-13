@@ -187,6 +187,8 @@ public static class PickupArt
                 return Build("icon_ice", 64, 64, ppu, center, DrawIce);
             case PickupIcon.Drill:
                 return Build("icon_drill", 64, 64, ppu, center, DrawDrill);
+            case PickupIcon.Mine:
+                return Build("icon_mine", 64, 64, ppu, center, DrawMine);
             default:
                 return null;
         }
@@ -244,6 +246,18 @@ public static class PickupArt
         l.Outlined(Circle(x, y, 27f, 30f, 16f), new Color(0.16f, 0.16f, 0.20f), new Color(0.40f, 0.80f, 1f), 2.2f);
         float arrow = Mathf.Min(Capsule(x, y, 8f, 30f, 50f, 30f, 2.6f), RotatedBox(x, y, 52f, 30f, 5.5f, 5.5f, 45f));
         l.Outlined(arrow, new Color(0.55f, 0.92f, 1f), Outline, 1.3f);
+    }
+
+    // Mina: ciemny krążek z kolcami dookoła i czerwonym środkiem.
+    static void DrawMine(Layers l, float x, float y)
+    {
+        Color metal = new Color(0.30f, 0.32f, 0.38f);
+
+        float spikes = Mathf.Min(Mathf.Min(Capsule(x, y, 32f, 10f, 32f, 54f, 3f), Capsule(x, y, 10f, 32f, 54f, 32f, 3f)),
+            Mathf.Min(Capsule(x, y, 17f, 17f, 47f, 47f, 3f), Capsule(x, y, 17f, 47f, 47f, 17f, 3f)));
+        l.Outlined(spikes, new Color(0.55f, 0.57f, 0.62f), Outline, 1.3f);
+        l.Outlined(Circle(x, y, 32f, 32f, 15f), metal, Outline, 1.6f);
+        l.Draw(Circle(x, y, 32f, 32f, 6f), new Color(0.95f, 0.25f, 0.2f));
     }
 
     static void DrawBolt(Layers l, float x, float y)

@@ -559,6 +559,9 @@ public class PlayerPickups : MonoBehaviour
             case SpecialItem.Teleport:
                 used = UseTeleport(item);
                 break;
+            case SpecialItem.Mine:
+                used = UseMine(cell);
+                break;
             case SpecialItem.Nuke:
                 // atomówka zużywa się dopiero po zrzuceniu (LaunchNuke), a Spacja tylko włącza celowanie
                 NukeTargeting.Begin(this, movement);
@@ -575,6 +578,29 @@ public class PlayerPickups : MonoBehaviour
         }
 
         return used;
+    }
+
+    // Kładzie minę na polu, na którym stoję. W rundzie online położenie miny leci do pozostałych graczy.
+    bool UseMine(Vector2Int cell)
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (bombs == null || bombs.bombPrefab == null || match == null)
+        {
+            return false;
+        }
+
+        if (!Mine.Place(cell, match.SlotOf(GetComponent<PlayerHealth>()), bombs.bombPrefab))
+        {
+            return false;
+        }
+
+        if (OnlineMatch.Active && movement != null && !movement.networkDriven)
+        {
+            OnlineMatch.SendMine(cell);
+        }
+
+        return true;
     }
 
     bool UseHammer(PickupDefinition item, Vector2Int cell, Vector2Int direction)

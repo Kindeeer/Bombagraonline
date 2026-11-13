@@ -44,6 +44,8 @@ public static class OnlineMatch
     const string LobbyMessage = "bomba.lobby";
     const string KickMessage = "bomba.kick";
     const string CurseMessage = "bomba.curse";
+    const string MineMessage = "bomba.mine";
+    const string MineHitMessage = "bomba.minehit";
 
     public static bool Active { get; private set; }
     public static int Seed { get; private set; }
@@ -78,10 +80,10 @@ public static class OnlineMatch
     public static float RoundStartedAt { get; private set; }
 
     // Czy przedmiot może wypaść w rundzie online. Przedmioty specjalne (atomówka, rakieta...) zależą od rzeczy,
-    // których jeszcze nie przesyłamy przez sieć, więc online nie wypadają. Kopanie bomb i klątwa mają własne wiadomości.
+    // których jeszcze nie przesyłamy przez sieć, więc online nie wypadają. Kopanie bomb, klątwa i mina mają własne wiadomości.
     public static bool AllowsPickup(PickupDefinition item)
     {
-        return item != null && item.special == SpecialItem.None;
+        return item != null && (item.special == SpecialItem.None || item.special == SpecialItem.Mine);
     }
 
     public static void End()
@@ -277,6 +279,8 @@ public static class OnlineMatch
         handlersOn.RegisterNamedMessageHandler(LobbyMessage, OnLobby);
         handlersOn.RegisterNamedMessageHandler(KickMessage, OnKick);
         handlersOn.RegisterNamedMessageHandler(CurseMessage, OnCurse);
+        handlersOn.RegisterNamedMessageHandler(MineMessage, OnMine);
+        handlersOn.RegisterNamedMessageHandler(MineHitMessage, OnMineHit);
     }
 
     // Wysyła wiadomość wszystkim: host od razu, klient przez hosta (host przekazuje ją dalej w handlerze).
@@ -557,6 +561,75 @@ public static class OnlineMatch
         if (Active && id != MyId && BombRegistry.TryGet(cell, out Bomb bomb))
         {
             bomb.Kick(direction);
+        }
+    }
+
+    // --- mina ---
+
+    // Położyłem minę na tym polu.
+    public static void SendMine(Vector2Int cell)
+    {
+        using (FastBufferWriter writer = PackCell(MyId, cell))
+        {
+            Relay(MineMessage, writer);
+        }
+    }
+
+    // Wszedłem na minę na tym polu i wybuchła.
+    public static void SendMineHit(Vector2Int cell)
+    {
+        using (FastBufferWriter writer = PackCell(MyId, cell))
+        {
+            Relay(MineHitMessage, writer);
+        }
+    }
+
+    static FastBufferWriter PackCell(string id, Vector2Int cell)
+    {
+        FastBufferWriter writer = new FastBufferWriter(96, Allocator.Temp);
+        writer.WriteValueSafe(id);
+        writer.WriteValueSafe(cell.x);
+        writer.WriteValueSafe(cell.y);
+        return writer;
+    }
+
+    static void OnMine(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string id);
+        reader.ReadValueSafe(out int x);
+        reader.ReadValueSafe(out int y);
+
+        Vector2Int cell = new Vector2Int(x, y);
+
+        using (FastBufferWriter writer = PackCell(id, cell))
+        {
+            Forward(MineMessage, writer, sender);
+        }
+
+        OnlineSlot owner = Players.Find(p => p.id == id);
+
+        if (Active && id != MyId && owner != null && BombPrefab != null)
+        {
+            Mine.Place(cell, owner.slot, BombPrefab);
+        }
+    }
+
+    static void OnMineHit(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string id);
+        reader.ReadValueSafe(out int x);
+        reader.ReadValueSafe(out int y);
+
+        Vector2Int cell = new Vector2Int(x, y);
+
+        using (FastBufferWriter writer = PackCell(id, cell))
+        {
+            Forward(MineHitMessage, writer, sender);
+        }
+
+        if (Active && id != MyId)
+        {
+            Mine.ExplodeAt(cell);
         }
     }
 

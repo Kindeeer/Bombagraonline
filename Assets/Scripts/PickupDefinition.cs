@@ -84,7 +84,9 @@ public enum SpecialItem
     Rocket,
     Teleport,
     // Atomówka: gracz stoi w miejscu i klika, gdzie ją zrzucić. Ogromny wybuch, ktoś może zginąć razem z Tobą.
-    Nuke
+    Nuke,
+    // Mina: pułapka kładziona pod sobą, wybucha, gdy wejdzie na nią przeciwnik (patrz Mine.cs).
+    Mine
 }
 
 // Efekty poza zwykłymi statystykami.
@@ -138,5 +140,6 @@ public enum PickupIcon
     Nuke,
     Snail,
     Ice,
-    Drill
+    Drill,
+    Mine
 }
