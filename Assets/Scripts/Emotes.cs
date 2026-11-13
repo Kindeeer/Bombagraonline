@@ -29,7 +29,8 @@ public static class Emotes
     {
         Show(slot, emote);
 
-        if (slot == 0 && OnlineMatch.Active)
+        // runda online albo poczekalnia przez internet
+        if (slot == 0 && (OnlineMatch.Active || (LobbyState.InLobby && OnlineSession.Connected)))
         {
             OnlineMatch.SendEmote((int)emote);
         }

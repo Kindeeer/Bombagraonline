@@ -60,6 +60,7 @@ public class LobbyController : MonoBehaviour
     Image teamImage;
     TextMeshProUGUI teamLabel;
     TextMeshProUGUI myNickLabel;
+    readonly List<RectTransform> emoteRects = new List<RectTransform>();
     int teamUiShown = -1;
     float teamPublishAt;
     RectTransform content;
@@ -129,6 +130,7 @@ public class LobbyController : MonoBehaviour
 
     void OnDestroy()
     {
+        OnlineMatch.LobbyEmote -= OnLobbyEmote;
         SaveIfDirty();
     }
 
@@ -218,6 +220,53 @@ public class LobbyController : MonoBehaviour
             Anchor(teamRect, left + margin + (right - left) * 0.38f, 0.92f, right - margin, 0.99f);
         }
 
+        // emotki: kolumna czterech przycisków przy lewej krawędzi okna z areną
+        float emoteWidth = (right - left) * 0.10f;
+
+        for (int i = 0; i < emoteRects.Count; i++)
+        {
+            float top = 0.78f - i * 0.125f;
+            Anchor(emoteRects[i], left + margin, top - 0.11f, left + margin + emoteWidth, top);
+        }
+
+    }
+
+    // ---------- Emotki ----------
+
+    void BuildEmoteButtons()
+    {
+        for (int i = 0; i < Emotes.Count; i++)
+        {
+            Emote emote = (Emote)i;
+
+            // Emotes.Send pokazuje dymek nad moją postacią i wysyła emotkę pozostałym graczom z pokoju
+            Button button = NewButton(root, "", new Color(0.18f, 0.06f, 0.14f, 0.85f), () => Emotes.Send(0, emote), 30f);
+            button.name = "Emote_" + emote;
+
+            Image icon = NewImage("Icon", button.transform, Color.white, false);
+            icon.sprite = Emotes.SpriteFor(emote);
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            Anchor(icon.rectTransform, 0.12f, 0.12f, 0.88f, 0.88f);
+
+            emoteRects.Add((RectTransform)button.transform);
+        }
+
+        OnlineMatch.LobbyEmote += OnLobbyEmote;
+    }
+
+    // Emotka innego gracza: dymek nad jego postacią w pokoju.
+    void OnLobbyEmote(string id, Emote emote)
+    {
+        EmoteBubbles bubbles = FindAnyObjectByType<EmoteBubbles>();
+
+        if (bubbles == null || !avatars.TryGetValue(id, out RemoteAvatar avatar) || avatar.body == null)
+        {
+            return;
+        }
+
+        GameAudio.Play(AudioEvent.Emote);
+        bubbles.ShowAbove(avatar.body.transform, 100 + (id.GetHashCode() & 0xFFFF), emote);
     }
 
     // ---------- Drużyny ----------
@@ -560,6 +609,8 @@ public class LobbyController : MonoBehaviour
         return Loc.P("Tryb: ", "Mode: ") + (rules.teams
                 ? Loc.P("drużyny 2 na 2", "teams 2 vs 2") + (rules.friendlyFire ? Loc.P(" (ogień w swoich)", " (friendly fire)") : "")
                 : Loc.P("każdy na każdego", "free for all"))
+            + "\n" + Loc.P("Mecz do: ", "Match to: ") + (rules.winsToEnd >= LobbySettings.WinsEndless
+                ? Loc.P("bez końca", "endless") : rules.winsToEnd + Loc.P(" wygranych", " wins"))
             + "\n" + Loc.P("Arena: ", "Arena: ") + (rules.arena < 0 ? Loc.P("losowa", "random") : (rules.arena + 1).ToString())
             + "\n" + Loc.P("Prędkość: x", "Speed: x") + rules.speed.ToString("0.0")
             + "\n" + Loc.P("Wielkość postaci: x", "Character size: x") + rules.size.ToString("0.0")
@@ -585,6 +636,7 @@ public class LobbyController : MonoBehaviour
         BuildNickLabel();
         BuildCodeBar();
         BuildTopBar();
+        BuildEmoteButtons();
         BuildSettingsPanel();
     }
 
@@ -813,6 +865,9 @@ public class LobbyController : MonoBehaviour
         {
             new SliderSpec { polish = "Drużyny 2 na 2", english = "Teams 2 vs 2", min = 0f, max = 1f, whole = true, format = onOff,
                 get = s => s.teams ? 1f : 0f, set = (s, v) => s.teams = v >= 0.5f },
+            new SliderSpec { polish = "Mecz do ilu wygranych", english = "Wins to end the match", min = 1f, max = LobbySettings.WinsEndless, whole = true,
+                format = v => v >= LobbySettings.WinsEndless ? "OFF" : Mathf.RoundToInt(v).ToString(),
+                get = s => s.winsToEnd, set = (s, v) => s.winsToEnd = Mathf.RoundToInt(v) },
             new SliderSpec { polish = "Ogień w swoich (drużyny)", english = "Friendly fire (teams)", min = 0f, max = 1f, whole = true, format = onOff,
                 get = s => s.friendlyFire ? 1f : 0f, set = (s, v) => s.friendlyFire = v >= 0.5f },
             new SliderSpec { polish = "Prędkość graczy", english = "Player speed", min = 0.6f, max = 1.8f, format = times,
@@ -1062,6 +1117,8 @@ public class LobbyController : MonoBehaviour
 
     void StartMatch()
     {
+        // nowy mecz liczy wygrane od zera
+        MatchManager.ResetScores();
         SaveIfDirty();
         LobbyState.SaveLast();
 

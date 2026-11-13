@@ -41,6 +41,7 @@ public static class OnlineMatch
     const string EndMessage = "bomba.end";
     const string LeaveMessage = "bomba.leave";
     const string EmoteMessage = "bomba.emote";
+    const string LobbyMessage = "bomba.lobby";
 
     public static bool Active { get; private set; }
     public static int Seed { get; private set; }
@@ -49,6 +50,9 @@ public static class OnlineMatch
 
     // prefab bomby do stawiania bomb przychodzących z sieci (ustawia go MatchManager)
     public static Bomb BombPrefab { get; set; }
+
+    // Emotka innego gracza odebrana w poczekalni (identyfikator gracza, emotka). Słucha tego LobbyController.
+    public static event System.Action<string, Emote> LobbyEmote;
 
     static CustomMessagingManager handlersOn;
 
@@ -61,6 +65,7 @@ public static class OnlineMatch
         Players.Clear();
         BombPrefab = null;
         handlersOn = null;
+        LobbyEmote = null;
     }
 
     public static string MyId => AuthenticationService.Instance.IsSignedIn ? AuthenticationService.Instance.PlayerId : "";
@@ -270,6 +275,7 @@ public static class OnlineMatch
         handlersOn.RegisterNamedMessageHandler(EndMessage, OnEnd);
         handlersOn.RegisterNamedMessageHandler(LeaveMessage, OnLeave);
         handlersOn.RegisterNamedMessageHandler(EmoteMessage, OnEmote);
+        handlersOn.RegisterNamedMessageHandler(LobbyMessage, OnLobby);
     }
 
     // Wysyła wiadomość wszystkim: host od razu, klient przez hosta (host przekazuje ją dalej w handlerze).
@@ -453,6 +459,58 @@ public static class OnlineMatch
         }
     }
 
+    // --- koniec meczu: powrót do poczekalni ---
+
+    // Host (albo gra bez internetu) kończy mecz: wszyscy wracają do poczekalni, w której host może zmienić zasady i zacząć od nowa.
+    public static void HostBackToLobby()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+
+        if (Active && manager != null && manager.IsServer && manager.IsListening)
+        {
+            using (FastBufferWriter writer = PackId(""))
+            {
+                manager.CustomMessagingManager.SendNamedMessageToAll(LobbyMessage, writer, NetworkDelivery.ReliableSequenced);
+            }
+        }
+
+        ReturnToLobby();
+    }
+
+    static void OnLobby(ulong sender, FastBufferReader reader)
+    {
+        if (Active && NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
+        {
+            ReturnToLobby();
+        }
+    }
+
+    // Kończy rundy, zeruje wygrane i wczytuje scenę od nowa już jako poczekalnię (połączenie i pokój zostają te same).
+    static void ReturnToLobby()
+    {
+        bool host = IsHost;
+
+        End();
+        MatchManager.ResetScores();
+        LobbyNet.States.Clear();
+        GameRules.Reset();
+
+        if (!OnlineSession.Connected)
+        {
+            LobbyState.BeginHost(null);
+        }
+        else if (host)
+        {
+            LobbyState.BeginHost(OnlineSession.Code);
+        }
+        else
+        {
+            LobbyState.BeginClient(OnlineSession.Code);
+        }
+
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
     // --- emotki ---
 
     public static void SendEmote(int emote)
@@ -479,6 +537,13 @@ public static class OnlineMatch
         using (FastBufferWriter writer = PackEmote(id, emote))
         {
             Forward(EmoteMessage, writer, sender);
+        }
+
+        // w poczekalni nie ma jeszcze slotów rundy: emotkę pokazuje poczekalnia nad postacią tego gracza
+        if (!Active && LobbyState.InLobby && id != MyId && emote >= 0 && emote < Emotes.Count)
+        {
+            LobbyEmote?.Invoke(id, (Emote)emote);
+            return;
         }
 
         OnlineSlot slot = Players.Find(p => p.id == id);

@@ -102,6 +102,7 @@ public partial class MainMenu : MonoBehaviour
     public static void ReturnToMenu()
     {
         GameRules.Reset();
+        MatchManager.ResetScores();
         LobbyState.End();
         OnlineMatch.SendLeave();
         OnlineMatch.End();

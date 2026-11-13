@@ -11,6 +11,8 @@ public class EmoteBubbles : MonoBehaviour
         public SpriteRenderer background;
         public SpriteRenderer icon;
         public float age;
+        // dymek nad dowolnym obiektem (postacie innych graczy w poczekalni); null = nad graczem ze slotu rundy
+        public Transform target;
     }
 
     const float Life = 2.5f;
@@ -27,6 +29,13 @@ public class EmoteBubbles : MonoBehaviour
     void OnDisable()
     {
         Emotes.Sent -= OnEmote;
+    }
+
+    // Dymek nad wskazanym obiektem (poczekalnia). key odróżnia dymki różnych graczy i nie może być numerem slotu (0-3).
+    public void ShowAbove(Transform target, int key, Emote emote)
+    {
+        OnEmote(key, emote);
+        bubbles[key].target = target;
     }
 
     void OnEmote(int slot, Emote emote)
@@ -91,9 +100,11 @@ public class EmoteBubbles : MonoBehaviour
             }
 
             Combatant combatant = match != null && pair.Key >= 0 && pair.Key < match.Slots.Length ? match.Slots[pair.Key] : null;
+            Transform owner = bubble.target != null ? bubble.target
+                : combatant != null && combatant.health != null && combatant.IsAlive ? combatant.health.transform : null;
             bubble.age += Time.unscaledDeltaTime;
 
-            if (bubble.age >= Life || combatant == null || combatant.health == null || !combatant.IsAlive)
+            if (bubble.age >= Life || owner == null)
             {
                 bubble.root.gameObject.SetActive(false);
                 continue;
@@ -106,7 +117,7 @@ public class EmoteBubbles : MonoBehaviour
             float bob = Mathf.Sin(bubble.age * 6f) * 0.05f;
             float alpha = k > 0.8f ? 1f - (k - 0.8f) / 0.2f : 1f;
 
-            Vector3 position = combatant.health.transform.position;
+            Vector3 position = owner.position;
             bubble.root.position = new Vector3(position.x, position.y + HeadHeight + bob, 0f);
             bubble.root.localScale = Vector3.one * pop;
 

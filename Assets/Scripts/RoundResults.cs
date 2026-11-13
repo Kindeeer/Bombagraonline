@@ -102,7 +102,7 @@ public class RoundResults : MonoBehaviour
 
     void AddHeader(RectTransform parent)
     {
-        TextMeshProUGUI title = NewText("Title", parent, Loc.T("board.title"), 44f, Color.white, TextAlignmentOptions.Center);
+        TextMeshProUGUI title = NewText("Title", parent, MatchManager.MatchOver ? Loc.P("KONIEC MECZU", "MATCH OVER") : Loc.T("board.title"), 44f, Color.white, TextAlignmentOptions.Center);
         Place(title.rectTransform, 0f, -8f, PanelWidth, 50f);
 
         Color grey = new Color(1f, 1f, 1f, 0.6f);

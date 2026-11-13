@@ -28,6 +28,8 @@ public class LobbySettings
     [Tooltip("Po ilu sekundach włącza się CHAOS. Najwięcej = CHAOS wyłączony.")]
     public float chaosSeconds = 75f;
     public int bots = 3;
+    [Tooltip("Mecz kończy się, gdy ktoś (albo drużyna) wygra tyle rund; potem wszyscy wracają do poczekalni. Najwięcej = bez końca.")]
+    public int winsToEnd = 3;
     [Tooltip("Tryb drużynowy 2 na 2: wygrywa drużyna, z której ktoś przeżyje.")]
     public bool teams;
     [Tooltip("Tryb drużynowy: czy bomby kolegi z drużyny też ranią.")]
@@ -35,6 +37,7 @@ public class LobbySettings
     public List<PickupWeight> weights = new List<PickupWeight>();
 
     public const float ChaosOff = 180f;
+    public const int WinsEndless = 10;
 
     public LobbySettings Clone()
     {

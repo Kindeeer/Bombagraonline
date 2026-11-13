@@ -119,7 +119,17 @@ public class MatchManager : MonoBehaviour
         Array.Clear(scores, 0, scores.Length);
         InputLocked = false;
         ChaosActive = false;
+        MatchOver = false;
     }
+
+    // Zeruje wygrane rundy (nowy mecz albo wyjście do menu).
+    public static void ResetScores()
+    {
+        Array.Clear(scores, 0, scores.Length);
+    }
+
+    // true, gdy właśnie skończona runda zakończyła cały mecz (ktoś dobił do liczby wygranych ustawionej przez hosta).
+    public static bool MatchOver { get; private set; }
 
     public static int GetScore(int slot)
     {
@@ -223,6 +233,7 @@ public class MatchManager : MonoBehaviour
         }
 
         ChaosActive = false;
+        MatchOver = false;
         roundClock = 0f;
         Register(human, 0, false);
 
@@ -261,6 +272,23 @@ public class MatchManager : MonoBehaviour
 
         // menu główne: boty pojawiają się dopiero po wyborze trybu (liczbę wybiera gracz), a skiny po wyborze skina
         bool menu = showMainMenu && MainMenu.ShouldShow && !online;
+
+        // powrót do poczekalni po skończonym meczu: bez menu i botów, od razu pokój z graczami
+        if (LobbyState.InLobby && !online && !menu)
+        {
+            InputLocked = false;
+            ApplyLooks();
+            LobbyController.Begin(human);
+
+            ArenaCamera lobbyCamera = FindAnyObjectByType<ArenaCamera>();
+
+            if (lobbyCamera != null)
+            {
+                lobbyCamera.SetMode(ArenaCamera.ViewMode.Medium, true);
+            }
+
+            return;
+        }
 
         if (menu)
         {
@@ -796,9 +824,14 @@ public class MatchManager : MonoBehaviour
 
         bool teamWin = winner != null && Teams.Active && winner.team >= 0;
 
+        // mecz z poczekalni kończy się, gdy zwycięzca rundy dobił do liczby wygranych ustawionej przez hosta
+        int winsToEnd = GameRules.Custom ? GameRules.Current.winsToEnd : LobbySettings.WinsEndless;
+        MatchOver = scorePoint && winner != null && winsToEnd < LobbySettings.WinsEndless && scores[winner.slot] >= Mathf.Max(1, winsToEnd);
+
         GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
         banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "")
-            : teamWin ? Teams.NameOf(winner.team) + Loc.P(" WYGRYWAJĄ RUNDĘ", " WINS THE ROUND")
+            : teamWin ? Teams.NameOf(winner.team) + (MatchOver ? Loc.P(" WYGRYWAJĄ MECZ!", " WINS THE MATCH!") : Loc.P(" WYGRYWAJĄ RUNDĘ", " WINS THE ROUND"))
+            : MatchOver ? NameOf(winner) + Loc.P(" WYGRYWA MECZ!", " WINS THE MATCH!")
             : Loc.F("round.wins", NameOf(winner));
 
         // moneta za rozegraną rundę (każdy gracz u siebie dostaje +1, także po przegranej)
@@ -830,7 +863,7 @@ public class MatchManager : MonoBehaviour
         if (scorePoint)
         {
             RoundResults.Show(this, winner);
-            delay = Mathf.Max(restartDelay, 6f);
+            delay = Mathf.Max(restartDelay, MatchOver ? 8f : 6f);
         }
 
         // runda online: następną planszę zaczyna host (klienci dostają od niego wiadomość o starcie)
@@ -842,6 +875,13 @@ public class MatchManager : MonoBehaviour
 
     void Restart()
     {
+        // koniec meczu: wszyscy wracają do poczekalni (online host mówi to pozostałym graczom)
+        if (MatchOver)
+        {
+            OnlineMatch.HostBackToLobby();
+            return;
+        }
+
         if (OnlineMatch.Active)
         {
             OnlineMatch.HostNextRound();
