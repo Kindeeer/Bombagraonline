@@ -183,6 +183,12 @@ public class PlayerMovement : MonoBehaviour
             if (bomb.Kick(direction))
             {
                 pickups.ConsumeKick();
+
+                // runda online: pozostali gracze kopią u siebie tę samą bombę w tę samą stronę
+                if (OnlineMatch.Active && !networkDriven)
+                {
+                    OnlineMatch.SendKick(target, direction);
+                }
             }
         }
     }

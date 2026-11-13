@@ -42,6 +42,8 @@ public static class OnlineMatch
     const string LeaveMessage = "bomba.leave";
     const string EmoteMessage = "bomba.emote";
     const string LobbyMessage = "bomba.lobby";
+    const string KickMessage = "bomba.kick";
+    const string CurseMessage = "bomba.curse";
 
     public static bool Active { get; private set; }
     public static int Seed { get; private set; }
@@ -75,14 +77,11 @@ public static class OnlineMatch
     // Chwila, w której zaczęła się ta runda (stany ruchu starsze od niej to jeszcze poczekalnia).
     public static float RoundStartedAt { get; private set; }
 
-    // Czy przedmiot może wypaść w rundzie online. Przedmioty specjalne (atomówka, rakieta...), kopanie bomb i klątwa
-    // odwracająca sterowanie zależą od rzeczy, których jeszcze nie przesyłamy przez sieć, więc online nie wypadają.
+    // Czy przedmiot może wypaść w rundzie online. Przedmioty specjalne (atomówka, rakieta...) zależą od rzeczy,
+    // których jeszcze nie przesyłamy przez sieć, więc online nie wypadają. Kopanie bomb i klątwa mają własne wiadomości.
     public static bool AllowsPickup(PickupDefinition item)
     {
-        return item != null
-            && item.special == SpecialItem.None
-            && item.effect != PickupEffect.Kick
-            && item.effect != PickupEffect.ReverseControls;
+        return item != null && item.special == SpecialItem.None;
     }
 
     public static void End()
@@ -276,6 +275,8 @@ public static class OnlineMatch
         handlersOn.RegisterNamedMessageHandler(LeaveMessage, OnLeave);
         handlersOn.RegisterNamedMessageHandler(EmoteMessage, OnEmote);
         handlersOn.RegisterNamedMessageHandler(LobbyMessage, OnLobby);
+        handlersOn.RegisterNamedMessageHandler(KickMessage, OnKick);
+        handlersOn.RegisterNamedMessageHandler(CurseMessage, OnCurse);
     }
 
     // Wysyła wiadomość wszystkim: host od razu, klient przez hosta (host przekazuje ją dalej w handlerze).
@@ -509,6 +510,126 @@ public static class OnlineMatch
         }
 
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    // --- kopnięcie bomby ---
+
+    public static void SendKick(Vector2Int cell, Vector2Int direction)
+    {
+        using (FastBufferWriter writer = PackKick(MyId, cell, direction))
+        {
+            Relay(KickMessage, writer);
+        }
+    }
+
+    static FastBufferWriter PackKick(string id, Vector2Int cell, Vector2Int direction)
+    {
+        FastBufferWriter writer = new FastBufferWriter(96, Allocator.Temp);
+        writer.WriteValueSafe(id);
+        writer.WriteValueSafe(cell.x);
+        writer.WriteValueSafe(cell.y);
+        writer.WriteValueSafe(direction.x);
+        writer.WriteValueSafe(direction.y);
+        return writer;
+    }
+
+    static void OnKick(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string id);
+        reader.ReadValueSafe(out int x);
+        reader.ReadValueSafe(out int y);
+        reader.ReadValueSafe(out int dx);
+        reader.ReadValueSafe(out int dy);
+
+        Vector2Int cell = new Vector2Int(x, y);
+        Vector2Int direction = new Vector2Int(Mathf.Clamp(dx, -1, 1), Mathf.Clamp(dy, -1, 1));
+
+        using (FastBufferWriter writer = PackKick(id, cell, direction))
+        {
+            Forward(KickMessage, writer, sender);
+        }
+
+        if (Active && id != MyId && BombRegistry.TryGet(cell, out Bomb bomb))
+        {
+            bomb.Kick(direction);
+        }
+    }
+
+    // --- klątwa (odwrócone sterowanie) ---
+
+    // Mój gracz podniósł klątwę i trafiła ona w postać victim (kopię cudzego gracza u mnie). Mówimy to wszystkim.
+    public static void SendCurse(PlayerPickups victim, string definitionName)
+    {
+        MatchManager match = MatchManager.Instance;
+        string targetId = "";
+
+        if (match != null)
+        {
+            foreach (Combatant combatant in match.Slots)
+            {
+                if (combatant != null && combatant.pickups == victim)
+                {
+                    targetId = combatant.onlineId ?? "";
+                }
+            }
+        }
+
+        if (targetId.Length == 0)
+        {
+            return;
+        }
+
+        using (FastBufferWriter writer = PackCurse(targetId, definitionName))
+        {
+            Relay(CurseMessage, writer);
+        }
+    }
+
+    static FastBufferWriter PackCurse(string targetId, string definitionName)
+    {
+        FastBufferWriter writer = new FastBufferWriter(160, Allocator.Temp);
+        writer.WriteValueSafe(targetId);
+        writer.WriteValueSafe(definitionName);
+        return writer;
+    }
+
+    static void OnCurse(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string targetId);
+        reader.ReadValueSafe(out string definitionName);
+
+        using (FastBufferWriter writer = PackCurse(targetId, definitionName))
+        {
+            Forward(CurseMessage, writer, sender);
+        }
+
+        MatchManager match = MatchManager.Instance;
+
+        if (!Active || match == null || PickupSpawner.Instance == null)
+        {
+            return;
+        }
+
+        foreach (Combatant combatant in match.Slots)
+        {
+            if (combatant == null || combatant.onlineId != targetId || !combatant.IsAlive || combatant.pickups == null)
+            {
+                continue;
+            }
+
+            // fioletowy okrąg widzą wszyscy, ale sama klątwa działa tylko na telefonie trafionego gracza
+            PulseRing.Spawn(combatant.pickups.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+
+            if (targetId == MyId)
+            {
+                PickupDefinition definition = PickupSpawner.Instance.FindDefinition(definitionName);
+
+                if (definition != null)
+                {
+                    combatant.pickups.Apply(definition);
+                }
+            }
+        }
     }
 
     // --- emotki ---

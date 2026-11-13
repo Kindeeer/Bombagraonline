@@ -165,7 +165,22 @@ public class PlayerPickups : MonoBehaviour
 
         if (definition != null && definition.effect == PickupEffect.ReverseControls)
         {
+            // runda online: o tym, kto dostaje klątwę, decyduje telefon gracza, który ją podniósł.
+            // Kopia cudzego gracza u mnie nic nie robi (jego telefon przyśle wiadomość, kogo trafiło).
+            if (OnlineMatch.Active && movement != null && movement.networkDriven)
+            {
+                return;
+            }
+
             PlayerPickups victim = NearestLivingOpponent();
+
+            if (OnlineMatch.Active && victim != null)
+            {
+                GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+                PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+                OnlineMatch.SendCurse(victim, definition.name);
+                return;
+            }
 
             if (victim != null)
             {

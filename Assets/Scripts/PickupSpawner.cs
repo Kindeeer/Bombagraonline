@@ -72,6 +72,12 @@ public class PickupSpawner : MonoBehaviour
     }
 
     // Przedmiot, który host wylosował i opisał wiadomością.
+    // Przedmiot o podanej nazwie pliku (null, gdy takiego nie ma w tabeli).
+    public PickupDefinition FindDefinition(string definitionName)
+    {
+        return table != null ? table.items.Find(item => item != null && item.name == definitionName) : null;
+    }
+
     public void SpawnFromNetwork(string definitionName, Vector2Int cell, bool bubble)
     {
         if (table == null)
@@ -79,7 +85,7 @@ public class PickupSpawner : MonoBehaviour
             return;
         }
 
-        PickupDefinition definition = table.items.Find(item => item != null && item.name == definitionName);
+        PickupDefinition definition = FindDefinition(definitionName);
 
         if (definition == null)
         {
