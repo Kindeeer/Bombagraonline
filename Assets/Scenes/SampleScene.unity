@@ -4139,10 +4139,10 @@ MonoBehaviour:
   iconHammer: {fileID: 21300000, guid: 9b45a324b19772143a837ccd0a301488, type: 3}
   iconRocket: {fileID: 21300000, guid: 2bff08f9c4cd50944a160395dcc6dc5a, type: 3}
   iconSkull: {fileID: 21300000, guid: 08b78cd7fdaf39745b74cd5131e7a36c, type: 3}
-  iconShield: {fileID: 0}
-  iconStar: {fileID: 0}
-  iconBoot: {fileID: 0}
-  iconBolt: {fileID: 0}
+  iconShield: {fileID: 21300000, guid: 391fe8e340cb4a9d8dbf09e33b3b6e82, type: 3}
+  iconStar: {fileID: 21300000, guid: 96618e72aa0a4a07949562b2a3927383, type: 3}
+  iconBoot: {fileID: 21300000, guid: 2e011efab67d4555b034c0f89cdb862d, type: 3}
+  iconBolt: {fileID: 21300000, guid: 88f32996b7f64538bcfb97071c5518d5, type: 3}
   iconClock: {fileID: 0}
   iconSwirl: {fileID: 0}
   iconDizzy: {fileID: 0}

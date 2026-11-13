@@ -123,6 +123,13 @@ public class LobbyController : MonoBehaviour
         if (!string.IsNullOrEmpty(LobbyState.Notice))
         {
             ShowToast(LobbyState.Notice);
+            LobbyState.Notice = null;
+        }
+
+        // host po wejściu do poczekalni (także po przejęciu pokoju albo po meczu) wysyła pozostałym swoje zasady
+        if (OnlineSession.Connected && LobbyState.IsHost)
+        {
+            publishAt = Time.unscaledTime + 3f;
         }
 
         RefreshOnline();
@@ -340,6 +347,13 @@ public class LobbyController : MonoBehaviour
             return;
         }
 
+        // poprzedni host wyszedł i usługa wybrała mnie na nowego hosta
+        if (OnlineSession.IsHost && !LobbyState.IsHost)
+        {
+            BecomeHost();
+            return;
+        }
+
         if (OnlineSession.TakeRefresh())
         {
             RefreshOnline();
@@ -356,6 +370,20 @@ public class LobbyController : MonoBehaviour
             teamPublishAt = 0f;
             OnlineSession.PublishMyData();
         }
+    }
+
+    // Zostaję hostem: przejmuję zasady poprzedniego hosta i wczytuję poczekalnię od nowa, już z panelem zasad i przyciskiem START.
+    // Kod pokoju i gracze zostają ci sami.
+    void BecomeHost()
+    {
+        if (LobbyState.RemoteRules != null)
+        {
+            LobbyState.ReplaceSettings(LobbyState.RemoteRules.Clone());
+        }
+
+        LobbyState.Notice = Loc.P("Poprzedni host wyszedł. Teraz ty jesteś hostem.", "The previous host left. You are the host now.");
+        LobbyState.BeginHost(OnlineSession.Code);
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     // Wysyła swój ruch i płynnie przesuwa postacie pozostałych graczy do ich ostatnich znanych pozycji.
@@ -1121,6 +1149,13 @@ public class LobbyController : MonoBehaviour
         MatchManager.ResetScores();
         SaveIfDirty();
         LobbyState.SaveLast();
+
+        // połączenie jeszcze się zestawia (np. tuż po przejęciu pokoju): start za chwilę, żeby nie zacząć gry bez pozostałych
+        if (OnlineSession.Connected && LobbyState.IsHost && !LobbyNet.Ready)
+        {
+            ShowToast(Loc.P("Łączenie z graczami, spróbuj za chwilę.", "Connecting to players, try again in a moment."));
+            return;
+        }
 
         // przez internet: host zaczyna rundę dla wszystkich graczy z pokoju naraz
         if (OnlineSession.Connected && LobbyState.IsHost && LobbyNet.Ready)

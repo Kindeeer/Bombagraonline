@@ -9,6 +9,10 @@ public class Rocket : MonoBehaviour
     const float FuseAfterLanding = 0.02f;
 
     Transform shooter;
+
+    // W którą stronę patrzy nos rakiety na grafice (stopnie: 0 = w prawo, 90 = w górę). Ikona od grafika jest narysowana
+    // ukosem, nosem w lewy górny róg, więc lecąca rakieta jest o tyle obracana. Prosta rakieta nosem do góry = 90.
+    const float SpriteNoseAngle = 135f;
     Vector2Int start;
     Vector2Int direction;
     Vector2Int landing;
@@ -57,7 +61,7 @@ public class Rocket : MonoBehaviour
         duration = Mathf.Max(0.05f, Vector3.Distance(from, to) / Speed);
 
         transform.position = from;
-        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f);
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - SpriteNoseAngle);
         transform.localScale = Vector3.one * 1.2f;
 
         SpriteRenderer renderer = gameObject.AddComponent<SpriteRenderer>();

@@ -57,6 +57,23 @@ public class OnlinePlayer
     }
 }
 
+// Przekazywanie hosta: gdy host wyjdzie, usługa Unity wybiera nowego hosta spośród graczy w pokoju i sama przepina połączenie
+// (nowy host zakłada nowe łącze, pozostali się do niego podłączają). Usługa pozwala przy tym przenieść dane starego hosta,
+// ale nasza gra ich nie potrzebuje: każdy telefon i tak zna skład, zasady i stan rundy. Dlatego dane są puste.
+class HostHandover : IMigrationDataHandler
+{
+    static readonly byte[] Nothing = { 1 };
+
+    public byte[] Generate()
+    {
+        return Nothing;
+    }
+
+    public void Apply(byte[] migrationData)
+    {
+    }
+}
+
 // Połączenie przez internet: logowanie anonimowe, założenie pokoju (HOST) albo dołączenie po kodzie (JOIN).
 // Używa Unity Multiplayer Services (sesja = pokój z kodem). Sesja przechowuje listę graczy z ich nickami i skinami oraz
 // zasady gry hosta, więc wszyscy w poczekalni widzą to samo. Ruch postaci i bomby po sieci dojdą w następnym kroku.
@@ -72,6 +89,10 @@ public static class OnlineSession
 
     static ISession session;
     static bool refreshNeeded;
+
+    // puste dane hosta wysyłamy rzadko (są tylko po to, żeby usługa miała włączone przekazywanie hosta)
+    static readonly TimeSpan HandoverUpload = TimeSpan.FromMinutes(5);
+    static readonly TimeSpan HandoverTimeout = TimeSpan.FromSeconds(3);
 
     public static bool Connected => session != null;
 
@@ -276,7 +297,7 @@ public static class OnlineSession
         {
             MaxPlayers = 4,
             IsPrivate = true
-        }.WithRelayNetwork(region);
+        }.WithRelayNetwork(region).WithHostMigration(new HostHandover(), HandoverUpload, HandoverTimeout);
 
         options.PlayerProperties = MyProperties();
         options.SessionProperties[RulesKey] = new SessionProperty(JsonUtility.ToJson(rules), VisibilityPropertyOptions.Member);
@@ -297,7 +318,9 @@ public static class OnlineSession
             LobbyNet.EnsureManager();
 
             // nick, skin i chroma lecą razem z dołączeniem (bez osobnego zapisu po wejściu)
-            JoinSessionOptions options = new JoinSessionOptions { PlayerProperties = MyProperties() };
+            // każdy dołączający może kiedyś zostać hostem, więc też włącza przekazywanie hosta
+            JoinSessionOptions options = new JoinSessionOptions { PlayerProperties = MyProperties() }
+                .WithHostMigration(new HostHandover(), HandoverUpload, HandoverTimeout);
             ISession joined = await MultiplayerService.Instance.JoinSessionByCodeAsync(code, options);
             Attach(joined);
             return null;
@@ -437,16 +460,11 @@ public static class OnlineSession
 
         Detach(current);
 
+        // host też tylko wychodzi (nie zamyka pokoju): usługa wybiera wtedy nowego hosta spośród pozostałych graczy,
+        // a pusty pokój znika sam
         try
         {
-            if (current.IsHost)
-            {
-                await current.AsHost().DeleteAsync();
-            }
-            else
-            {
-                await current.LeaveAsync();
-            }
+            await current.LeaveAsync();
         }
         catch (Exception exception)
         {
@@ -467,6 +485,7 @@ public static class OnlineSession
         session.SessionPropertiesChanged += OnSessionChanged;
         session.RemovedFromSession += OnSessionEnded;
         session.Deleted += OnSessionEnded;
+        session.SessionHostChanged += OnHostChanged;
     }
 
     static void Detach(ISession oldSession)
@@ -478,6 +497,13 @@ public static class OnlineSession
         oldSession.SessionPropertiesChanged -= OnSessionChanged;
         oldSession.RemovedFromSession -= OnSessionEnded;
         oldSession.Deleted -= OnSessionEnded;
+        oldSession.SessionHostChanged -= OnHostChanged;
+    }
+
+    // Pokój ma nowego hosta (poprzedni wyszedł).
+    static void OnHostChanged(string newHostId)
+    {
+        refreshNeeded = true;
     }
 
     static void OnSessionChanged()

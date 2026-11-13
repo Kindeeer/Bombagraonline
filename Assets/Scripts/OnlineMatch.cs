@@ -785,7 +785,8 @@ public static class OnlineMatch
         }
     }
 
-    // Ktoś wyszedł (wiadomość albo zniknął z sesji): znika z areny i z następnych rund. Gdy wyszedł host, kończymy grę.
+    // Ktoś wyszedł (wiadomość albo zniknął z sesji): znika z areny i z następnych rund. Gdy wyszedł host, gra toczy się dalej:
+    // usługa wybiera nowego hosta, a ten przejmuje jego zadania (losowanie przedmiotów, koniec rundy, start następnej).
     public static void PlayerLeft(string id)
     {
         OnlineSlot slot = Players.Find(p => p.id == id);
@@ -795,7 +796,6 @@ public static class OnlineMatch
             return;
         }
 
-        bool hostLeft = slot.isHost && !IsHost;
         Players.Remove(slot);
 
         if (MatchManager.Instance != null)
@@ -803,9 +803,5 @@ public static class OnlineMatch
             MatchManager.Instance.OnlineLeft(id);
         }
 
-        if (hostLeft)
-        {
-            MainMenu.ReturnToMenu();
-        }
     }
 }

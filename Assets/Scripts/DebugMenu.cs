@@ -11,7 +11,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 #endif
 
-// Menu do testowania pod klawiszem TAB, w stylu sklepu: kategorie po lewej, duże przyciski po prawej, obsługa samą myszką.
+// Menu do testowania pod klawiszem F1, w stylu sklepu: kategorie po lewej, duże przyciski po prawej, obsługa samą myszką.
 // Kategorie: Cheaty (noclip, nieśmiertelność...), Przedmioty (każdy przedmiot na polu obok albo od razu w ręce),
 // Statystyki, Runda, Kamera i czas.
 // Tworzy się samo (nie trzeba nic dodawać do sceny) i działa tylko w edytorze oraz w buildach "Development Build".
@@ -147,12 +147,10 @@ public class DebugMenu : MonoBehaviour
 #if ENABLE_INPUT_SYSTEM
         Keyboard keyboard = Keyboard.current;
 
-        // TAB w edytorze Unity przesuwa fokus na kontrolki okna (np. Simulatora), a potem Spacja je wciska,
-        // dlatego menu otwiera też F1 i klawisz ` (nie ruszają fokusu)
-        return keyboard != null
-            && (keyboard.tabKey.wasPressedThisFrame || keyboard.f1Key.wasPressedThisFrame || keyboard.backquoteKey.wasPressedThisFrame);
+        // menu testowe otwiera tylko F1 (TAB w edytorze Unity przesuwa fokus na kontrolki okna, a ` bywa potrzebny przy pisaniu)
+        return keyboard != null && keyboard.f1Key.wasPressedThisFrame;
 #else
-        return Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.F1) || Input.GetKeyDown(KeyCode.BackQuote);
+        return Input.GetKeyDown(KeyCode.F1);
 #endif
     }
 
@@ -297,7 +295,7 @@ public class DebugMenu : MonoBehaviour
         BuildRoundPage(AddPage("Runda", sidebar.transform, contentArea));
         BuildCameraPage(AddPage("Kamera i czas", sidebar.transform, contentArea));
 
-        TextMeshProUGUI hint = NewText(sidebar.transform, "TAB, F1 albo ` zamyka menu", 26f, MutedText, TextAlignmentOptions.Center);
+        TextMeshProUGUI hint = NewText(sidebar.transform, "F1 zamyka menu", 26f, MutedText, TextAlignmentOptions.Center);
         hint.gameObject.AddComponent<LayoutElement>().preferredHeight = 50f;
 
         refreshers.Add(UpdateInfo);
@@ -379,6 +377,11 @@ public class DebugMenu : MonoBehaviour
             () => FreezeBots, value => FreezeBots = value);
         AddToggleRow(page, "Loguj zdarzenia audio", "Wypisuje w Console każde zdarzenie dźwiękowe (bez FMOD też). Pomaga podpiąć eventy w FMOD.",
             () => GameAudio.LogEvents, value => GameAudio.LogEvents = value);
+        AddActionRow(page, "Dodaj monety", "Dopisuje 500 monet do testowania skrzynek i sklepu (masz teraz: widać w menu SHOP).", "+500", GreenColor, () =>
+        {
+            PlayerWallet.AddCoins(500);
+            GameAudio.Play(AudioEvent.CoinGain);
+        });
         AddToggleRow(page, "Pauza przy otwartym menu", "Gra stoi, dopóki menu jest otwarte. Wyłącz, żeby oglądać efekty na żywo.",
             () => pauseWhenOpen, value => pauseWhenOpen = value);
     }

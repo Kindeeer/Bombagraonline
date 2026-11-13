@@ -207,12 +207,12 @@ public partial class MainMenu
             shopChest.glow.sprite = RaysSprite();
         }
 
-        // przycisk darmowych monet jest tylko do testów
+        // darmowe monety do testów są teraz w menu testowym (F1 > Cheaty), więc przycisk w sklepie jest schowany
         Transform free = shop.Find("Button_FreeCoins");
 
         if (free != null)
         {
-            free.gameObject.SetActive(Debug.isDebugBuild);
+            free.gameObject.SetActive(false);
         }
 
         RectTransform edit = pages[Page.Edit];

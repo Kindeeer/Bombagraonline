@@ -97,6 +97,8 @@ public class MatchManager : MonoBehaviour
     public static bool ChaosActive { get; private set; }
 
     float roundClock;
+    // czy ten telefon zaplanował już start następnej rundy (robi to host)
+    bool restartScheduled;
     int nukeOwner = -1;
     float nukeWindowUntil;
     float nukeGraceUntil;
@@ -701,6 +703,13 @@ public class MatchManager : MonoBehaviour
     {
         if (RoundOver)
         {
+            // host wyszedł, gdy na ekranie były wyniki rundy: następną rundę zaczyna nowy host
+            if (OnlineMatch.Active && OnlineMatch.IsHost && !restartScheduled)
+            {
+                restartScheduled = true;
+                Invoke(nameof(Restart), 3f);
+            }
+
             return;
         }
 
@@ -869,6 +878,7 @@ public class MatchManager : MonoBehaviour
         // runda online: następną planszę zaczyna host (klienci dostają od niego wiadomość o starcie)
         if (!OnlineMatch.Active || OnlineMatch.IsHost)
         {
+            restartScheduled = true;
             Invoke(nameof(Restart), delay);
         }
     }
