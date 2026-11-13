@@ -157,6 +157,12 @@ public class PlayerPickups : MonoBehaviour
     // żywego przeciwnika. Fioletowy okrąg pokazuje, kto ją dostał. Gdy nie ma żadnego przeciwnika, dostaje ją sam podnoszący.
     void ApplyCollected(PickupDefinition definition)
     {
+        // statystyki profilu: przedmioty zebrane przeze mnie
+        if (definition != null && movement != null && movement.useKeyboard)
+        {
+            PlayerProgress.Add(PlayerStat.PickupsCollected);
+        }
+
         if (definition != null && definition.effect == PickupEffect.ReverseControls)
         {
             PlayerPickups victim = NearestLivingOpponent();

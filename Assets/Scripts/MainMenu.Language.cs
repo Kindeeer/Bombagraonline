@@ -227,6 +227,18 @@ public partial class MainMenu
             case Page.Join:
                 RefreshMultiplayer();
                 break;
+            case Page.Main:
+                RefreshProfileBadge();
+                break;
+            case Page.Profile:
+                RefreshProfile();
+                break;
+            case Page.Icons:
+                RebuildIcons();
+                break;
+            case Page.Missions:
+                RefreshMissions();
+                break;
         }
     }
 

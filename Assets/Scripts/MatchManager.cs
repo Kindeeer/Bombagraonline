@@ -326,6 +326,12 @@ public class MatchManager : MonoBehaviour
             }
         }
 
+        // statystyki profilu: moja śmierć
+        if (victim != null && victim.slot == 0 && !victim.remote)
+        {
+            PlayerProgress.Add(PlayerStat.Deaths);
+        }
+
         int killerSlot = victimHealth.LastHitSlot;
 
         if (victim == null || killerSlot < 0 || killerSlot >= MaxSlots || killerSlot == victim.slot || Time.time - victimHealth.LastHitAt > 1.5f)
@@ -341,6 +347,12 @@ public class MatchManager : MonoBehaviour
         }
 
         killer.kills++;
+
+        // statystyki profilu: moje zabójstwa (gracze i boty liczone osobno)
+        if (killer.slot == 0)
+        {
+            PlayerProgress.Add(victim.isBot ? PlayerStat.BotKills : PlayerStat.PlayerKills);
+        }
 
         if (!victim.isBot)
         {
@@ -686,6 +698,16 @@ public class MatchManager : MonoBehaviour
         if (scorePoint)
         {
             PlayerWallet.AddCoins(PlayerWallet.RoundReward);
+        }
+
+        // profil: statystyki rundy, doświadczenie i ewentualny awans na wyższy poziom
+        if (scorePoint && Slots[0] != null)
+        {
+            GameArt art = GameArt.Instance;
+            string skin = art != null && art.SkinCount > 0 ? art.players[Mathf.Clamp(SkinSelection.Index, 0, art.SkinCount - 1)].label : "";
+            Combatant me = Slots[0];
+
+            PlayerProgress.RoundFinished(winner == me, me.humanKills, me.kills - me.humanKills, OnlineMatch.Active, skin);
         }
 
         // monety za wygraną rundę (tylko dla mnie: bot ani cudzy gracz nie dają monet)

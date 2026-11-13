@@ -8,9 +8,9 @@ using UnityEngine.UI;
 public class RoundResults : MonoBehaviour
 {
     const float PanelWidth = 1040f;
-    const float RowHeight = 78f;
+    const float RowHeight = 68f;
     const float HeaderHeight = 84f;
-    const float FooterHeight = 70f;
+    const float FooterHeight = 92f;
 
     static readonly Color Gold = new Color(1f, 0.85f, 0.25f);
     static readonly Color PanelColor = new Color(0.20f, 0.07f, 0.15f, 0.93f);
@@ -75,8 +75,23 @@ public class RoundResults : MonoBehaviour
         total.rectTransform.anchorMin = new Vector2(0f, 0f);
         total.rectTransform.anchorMax = new Vector2(1f, 0f);
         total.rectTransform.pivot = new Vector2(0.5f, 0f);
-        total.rectTransform.sizeDelta = new Vector2(0f, FooterHeight);
-        total.rectTransform.anchoredPosition = Vector2.zero;
+        total.rectTransform.sizeDelta = new Vector2(0f, FooterHeight * 0.5f);
+        total.rectTransform.anchoredPosition = new Vector2(0f, FooterHeight * 0.48f);
+
+        // doświadczenie za tę rundę i poziom konta (przy awansie złoty napis z nagrodą)
+        RoundProgress progress = PlayerProgress.LastRound;
+        int level = PlayerProgress.Level;
+        string xpLine = progress.LeveledUp
+            ? Loc.P("AWANS NA POZIOM ", "LEVEL UP: ") + level + "!  +" + progress.levelCoins + Loc.P(" monet", " coins")
+            : "+" + progress.xp + " XP   •   " + Loc.P("poziom ", "level ") + level + "  (" + PlayerProgress.XpInLevel + " / " + PlayerProgress.XpToNext(level) + ")";
+
+        TextMeshProUGUI xp = NewText("Xp", panel, xpLine, progress.LeveledUp ? 34f : 28f,
+            progress.LeveledUp ? new Color(0.55f, 1f, 0.5f) : new Color(1f, 1f, 1f, 0.8f), TextAlignmentOptions.Center);
+        xp.rectTransform.anchorMin = new Vector2(0f, 0f);
+        xp.rectTransform.anchorMax = new Vector2(1f, 0f);
+        xp.rectTransform.pivot = new Vector2(0.5f, 0f);
+        xp.rectTransform.sizeDelta = new Vector2(0f, FooterHeight * 0.5f);
+        xp.rectTransform.anchoredPosition = new Vector2(0f, 4f);
 
         panel.localScale = Vector3.zero;
     }

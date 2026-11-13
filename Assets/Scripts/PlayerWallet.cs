@@ -81,6 +81,7 @@ public static class PlayerWallet
         }
 
         coins = (int)Math.Min((long)Coins + amount, MaxCoins);
+        PlayerProgress.Add(PlayerStat.CoinsEarned, amount);
         PlayerPrefs.SetInt(CoinsKey, coins);
         PlayerPrefs.Save();
         Changed?.Invoke();

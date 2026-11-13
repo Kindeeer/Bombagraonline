@@ -155,6 +155,12 @@ public class BombController : MonoBehaviour
         bomb.Init(cell, stats.fuseTime, Mathf.Max(1, range));
         bomb.ownerSlot = ownerSlot;
 
+        // statystyki profilu: bomby postawione przeze mnie
+        if (ownerSlot == 0 && movement != null && movement.useKeyboard)
+        {
+            PlayerProgress.Add(PlayerStat.BombsPlaced);
+        }
+
         // runda online: pozostali gracze stawiają taką samą bombę u siebie
         if (OnlineMatch.Active && movement != null && movement.useKeyboard)
         {

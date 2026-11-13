@@ -121,6 +121,9 @@ public partial class MainMenu : MonoBehaviour
         Edit,
         Multi,
         Join,
+        Profile,
+        Icons,
+        Missions,
         Pause,
         PauseSettings
     }
@@ -197,6 +200,7 @@ public partial class MainMenu : MonoBehaviour
 
         BuildShop();
         BuildMultiplayerPages();
+        BuildProfilePage();
 
         Transform grid = FindDeep(transform, "Grid");
         skinGrid = grid != null ? (RectTransform)grid : null;
@@ -483,6 +487,12 @@ public partial class MainMenu : MonoBehaviour
             }
         }
 
+        // zegar na ekranie misji odlicza na bieżąco
+        if (IsOpen && current == Page.Missions)
+        {
+            TickMissionsTimer();
+        }
+
         // animacja przełączników: gałka płynnie jedzie na drugą stronę
         if ((IsOpen && current == Page.Settings) || (PauseOpen && current == Page.PauseSettings))
         {
@@ -578,6 +588,13 @@ public partial class MainMenu : MonoBehaviour
             case Page.Multi:
                 ShowPage(Page.Mode);
                 break;
+            case Page.Profile:
+            case Page.Missions:
+                ShowPage(Page.Main);
+                break;
+            case Page.Icons:
+                ShowPage(Page.Profile);
+                break;
             case Page.Join:
                 ShowPage(Page.Multi);
                 break;
@@ -603,6 +620,23 @@ public partial class MainMenu : MonoBehaviour
         if (page == Page.Bots)
         {
             HighlightBotChoice();
+        }
+
+        if (page == Page.Main)
+        {
+            RefreshProfileBadge();
+        }
+        else if (page == Page.Profile)
+        {
+            RefreshProfile();
+        }
+        else if (page == Page.Icons)
+        {
+            RebuildIcons();
+        }
+        else if (page == Page.Missions)
+        {
+            RefreshMissions();
         }
 
         if (page == Page.Settings || page == Page.PauseSettings)
