@@ -1,14 +1,15 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-// Połysk "zaklęcia" na obrazku postaci w interfejsie (podgląd w EDIT, karta po otwarciu skrzynki).
-// Nakłada na obrazek drugi obrazek z tym samym sprite'em i shaderem BombGame/EnchantGlint.
+// Wzór chromy na obrazku postaci w interfejsie (podgląd w EDIT, karta po otwarciu skrzynki).
+// Nakłada na obrazek drugi obrazek z tym samym sprite'em i shaderem BombGame/EnchantGlint (ikonki zsuwające się po postaci).
 [RequireComponent(typeof(Image))]
 public class UiEnchantGlint : MonoBehaviour
 {
     Image source;
     Image glint;
     Material material;
+    Sprite shownSprite;
 
     public void Configure(ChromaFxLook look)
     {
@@ -49,9 +50,9 @@ public class UiEnchantGlint : MonoBehaviour
             glint.material = material;
         }
 
-        material.SetColor("_GlintColor", look.glintColor);
-        material.SetFloat("_Rainbow", look.glintRainbow ? 1f : 0f);
+        EnchantGlint.Apply(material, look);
         glint.enabled = true;
+        shownSprite = null;
         Follow();
     }
 
@@ -69,6 +70,12 @@ public class UiEnchantGlint : MonoBehaviour
 
         glint.sprite = source.sprite;
         glint.preserveAspect = source.preserveAspect;
+
+        if (source.sprite != shownSprite)
+        {
+            shownSprite = source.sprite;
+            EnchantGlint.ApplySprite(material, shownSprite);
+        }
     }
 
     void OnDestroy()

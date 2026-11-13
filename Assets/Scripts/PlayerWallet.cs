@@ -8,6 +8,9 @@ public static class PlayerWallet
 {
     public const int WinReward = 10;
 
+    // Moneta za samo rozegranie rundy (dla każdego gracza, także przegranego).
+    public const int RoundReward = 1;
+
     // Nagroda za zabicie prawdziwego gracza (nie bota): 1-2 monety. Użyje jej tryb sieciowy, bo w grze z botami
     // nie ma kogo zabić "na prawdziwo".
     public const int PlayerKillReward = 2;

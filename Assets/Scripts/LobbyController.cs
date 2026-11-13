@@ -270,6 +270,10 @@ public class LobbyController : MonoBehaviour
                 avatar.body.transform.position = Vector3.Lerp(avatar.body.transform.position, avatar.target, 1f - Mathf.Exp(-14f * Time.deltaTime));
             }
 
+            // ta sama kolejność rysowania względem ścian co u własnej postaci
+            Vector3 place = avatar.body.transform.position;
+            avatar.body.transform.position = new Vector3(place.x, place.y, PlayerVisual.SortDepth(place.y));
+
             ShowAvatarFrame(avatar);
 
             if (arenaCamera != null && avatar.nick != null)

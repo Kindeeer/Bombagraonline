@@ -747,6 +747,22 @@ public partial class MainMenu
         return content;
     }
 
+    // Sam wzór chromy na obrazku postaci (bez cząstek), np. na małych kartach.
+    static void ShowPattern(Image image, ChromaFxLook look)
+    {
+        UiEnchantGlint glint = image.GetComponent<UiEnchantGlint>();
+
+        if (glint == null && look.glint)
+        {
+            glint = image.gameObject.AddComponent<UiEnchantGlint>();
+        }
+
+        if (glint != null)
+        {
+            glint.Configure(look);
+        }
+    }
+
     // Włącza (albo wyłącza) efekt chromy na obrazku postaci w interfejsie.
     static void ShowFx(Image image, ChromaFxLook look)
     {
@@ -804,6 +820,12 @@ public partial class MainMenu
         preview.sprite = owned ? ChromaFront(skin, chroma) : ChromaFront(skin, -1);
         preview.preserveAspect = true;
         preview.raycastTarget = false;
+
+        // odblokowana chroma pokazuje na karcie swój wzór (ikonki zsuwające się po postaci)
+        if (owned && !isDefault)
+        {
+            ShowPattern(preview, list[chroma].Fx);
+        }
 
         // kłódka na zablokowanej chromie
         if (!owned)

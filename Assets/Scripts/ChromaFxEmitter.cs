@@ -7,6 +7,7 @@ public abstract class ChromaFxEmitter : MonoBehaviour
 {
     protected class Particle
     {
+        public FxStyle style;
         public Vector2 position;
         public Vector2 velocity;
         public float age;
@@ -15,29 +16,44 @@ public abstract class ChromaFxEmitter : MonoBehaviour
         public float rotation;
         public float spin;
         public float phase;
-        public Color colorA;
-        public Color colorB;
+        public Color tint;
+        // true = rysowana przed postacią, false = za nią
+        public bool front;
+        // miejsce w kolejności rysowania świata gry (ustawia WorldChromaFx)
+        public float sort;
         public GameObject view;
     }
 
     const int MaxParticles = 40;
 
+    // pod koniec życia płomień ciemnieje jak stygnący żar
+    static readonly Color EmberTint = new Color(0.8f, 0.5f, 0.45f, 1f);
+
     protected readonly List<Particle> particles = new List<Particle>();
 
     ChromaFxLook look;
     float spawnAccumulator;
+    float extraAccumulator;
+
+    protected ChromaFxLook Look => look;
 
     protected virtual float Delta => Time.deltaTime;
     protected virtual float RateScale => 1f;
 
     // Gdzie jest postać: punkt pod stopami, wysokość i szerokość. false = postaci teraz nie widać (martwa, ukryta).
     protected abstract bool GetBody(out Vector2 feet, out float height, out float width);
-    protected abstract void CreateView(Particle particle, int spriteKind);
+    protected abstract void CreateView(Particle particle, Sprite sprite);
     protected abstract void ApplyView(Particle particle, float alpha, float scale, Color color);
     protected abstract void DestroyView(Particle particle);
 
     protected void SetLook(ChromaFxLook newLook)
     {
+        // inne kolory albo inny efekt: stare cząstki znikają, żeby nie mieszać dwóch wyglądów
+        if (newLook.effect != look.effect || newLook.colorA != look.colorA || newLook.colorB != look.colorB || newLook.rainbow != look.rainbow)
+        {
+            Clear();
+        }
+
         look = newLook;
         enabled = newLook.HasParticles;
 
@@ -56,6 +72,7 @@ public abstract class ChromaFxEmitter : MonoBehaviour
 
         particles.Clear();
         spawnAccumulator = 0f;
+        extraAccumulator = 0f;
     }
 
     void OnDisable()
@@ -82,20 +99,18 @@ public abstract class ChromaFxEmitter : MonoBehaviour
 
         if (visible)
         {
-            spawnAccumulator += style.rate * look.strength * RateScale * dt;
+            Emit(style, ref spawnAccumulator, dt, feet, height);
 
-            while (spawnAccumulator >= 1f && particles.Count < MaxParticles)
+            if (style.extra != null)
             {
-                spawnAccumulator -= 1f;
-                Spawn(style, feet, height);
+                Emit(style.extra, ref extraAccumulator, dt, feet, height);
             }
-
-            spawnAccumulator = Mathf.Min(spawnAccumulator, 2f);
         }
 
         for (int i = particles.Count - 1; i >= 0; i--)
         {
             Particle particle = particles[i];
+            FxStyle own = particle.style;
             particle.age += dt;
 
             if (particle.age >= particle.life)
@@ -106,45 +121,73 @@ public abstract class ChromaFxEmitter : MonoBehaviour
             }
 
             particle.position += particle.velocity * dt;
-            particle.position.x += Mathf.Sin(particle.age * 3f + particle.phase) * style.sway * height * dt;
-            particle.rotation += particle.spin * dt;
+            particle.position.x += Mathf.Sin(particle.age * 3f + particle.phase) * own.sway * height * dt;
 
-            float t = particle.age / particle.life;
-            float alpha = Mathf.Clamp01(t / 0.15f) * Mathf.Clamp01((1f - t) / 0.4f);
-            float scale = style.shrink ? 1f - 0.6f * t : 1f;
-
-            if (style.twinkle)
+            // obracanie (śnieg, liście) albo kołysanie na boki (płomienie, serduszka, gwiazdki)
+            if (own.wobble > 0f)
             {
-                scale *= 0.45f + 0.55f * Mathf.Abs(Mathf.Sin(particle.age * 9f + particle.phase));
+                particle.rotation = Mathf.Sin(particle.age * 5f + particle.phase) * own.wobble;
+            }
+            else
+            {
+                particle.rotation += particle.spin * dt;
             }
 
-            Color color = style.colorOverLife ? Color.Lerp(particle.colorA, particle.colorB, t) : particle.colorA;
+            float t = particle.age / particle.life;
+
+            // cząstka wyskakuje z lekkim przeskokiem (jak wyciśnięta), a pod koniec blednie
+            float pop = t < 0.18f ? PopIn(t / 0.18f) : 1f;
+            float alpha = Mathf.Clamp01(t / 0.08f) * Mathf.Clamp01((1f - t) / 0.35f);
+            float scale = pop * (own.shrink ? 1f - 0.55f * t : 1f);
+
+            if (own.twinkle)
+            {
+                scale *= 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(particle.age * 7f + particle.phase));
+            }
+
+            Color color = own.colorOverLife ? Color.Lerp(particle.tint, particle.tint * EmberTint, t) : particle.tint;
             ApplyView(particle, alpha, scale, color);
         }
+    }
+
+    // Od 0 do 1 z przeskokiem ponad 1 po drodze.
+    static float PopIn(float k)
+    {
+        const float overshoot = 1.9f;
+        k -= 1f;
+        return 1f + k * k * ((overshoot + 1f) * k + overshoot);
+    }
+
+    void Emit(FxStyle style, ref float accumulator, float dt, Vector2 feet, float height)
+    {
+        accumulator += style.rate * look.strength * RateScale * dt;
+
+        while (accumulator >= 1f && particles.Count < MaxParticles)
+        {
+            accumulator -= 1f;
+            Spawn(style, feet, height);
+        }
+
+        accumulator = Mathf.Min(accumulator, 2f);
     }
 
     void Spawn(FxStyle style, Vector2 feet, float height)
     {
         Particle particle = new Particle
         {
+            style = style,
             position = feet + new Vector2(Random.Range(-style.spawnX, style.spawnX), Random.Range(style.spawnYMin, style.spawnYMax)) * height,
             velocity = new Vector2(Random.Range(style.velXMin, style.velXMax), Random.Range(style.velYMin, style.velYMax)) * height,
-            life = style.life * Random.Range(0.7f, 1.2f),
+            life = style.life * Random.Range(0.75f, 1.2f),
             size = Random.Range(style.sizeMin, style.sizeMax) * height,
             rotation = style.spin > 0f ? Random.Range(0f, 360f) : 0f,
             spin = style.spin > 0f ? Random.Range(-style.spin, style.spin) : 0f,
-            phase = Random.Range(0f, 6.28f)
+            phase = Random.Range(0f, 6.28f),
+            tint = ChromaFx.PickTint(look),
+            front = Random.value >= style.behind
         };
 
-        particle.colorA = ChromaFx.PickColor(look);
-        particle.colorB = style.colorOverLife ? look.colorB : particle.colorA;
-
-        if (style.colorOverLife)
-        {
-            particle.colorA = look.colorA;
-        }
-
-        CreateView(particle, style.sprite);
+        CreateView(particle, ChromaFx.SpriteOf(style.sprite, look));
         particles.Add(particle);
     }
 }

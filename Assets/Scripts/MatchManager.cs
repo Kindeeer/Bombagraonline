@@ -221,6 +221,12 @@ public class MatchManager : MonoBehaviour
             chaosAfterSeconds = GameRules.Current.chaosSeconds;
         }
 
+        // dymki emotek nad głowami graczy
+        if (GetComponent<EmoteBubbles>() == null)
+        {
+            gameObject.AddComponent<EmoteBubbles>();
+        }
+
         // strzałki z buźkami graczy, którzy są poza kadrem
         if (FindAnyObjectByType<OffscreenIndicators>() == null)
         {
@@ -676,7 +682,13 @@ public class MatchManager : MonoBehaviour
         GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
         banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "") : Loc.F("round.wins", NameOf(winner));
 
-        // moneta za wygraną rundę (tylko dla mnie: bot ani cudzy gracz nie dają monet)
+        // moneta za rozegraną rundę (każdy gracz u siebie dostaje +1, także po przegranej)
+        if (scorePoint)
+        {
+            PlayerWallet.AddCoins(PlayerWallet.RoundReward);
+        }
+
+        // monety za wygraną rundę (tylko dla mnie: bot ani cudzy gracz nie dają monet)
         if (winner != null && scorePoint && !winner.isBot && !winner.remote)
         {
             PlayerWallet.AddCoins(PlayerWallet.WinReward);

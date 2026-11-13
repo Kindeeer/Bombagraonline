@@ -116,9 +116,9 @@ public class RoundResults : MonoBehaviour
         label.overflowMode = TextOverflowModes.Ellipsis;
         Place(label.rectTransform, 90f, 0f, 380f, RowHeight - 8f);
 
-        int coins = combatant.humanKills * PlayerWallet.PlayerKillReward + (isWinner && !combatant.isBot ? PlayerWallet.WinReward : 0);
+        int coins = PlayerWallet.RoundReward + combatant.humanKills * PlayerWallet.PlayerKillReward + (isWinner && !combatant.isBot ? PlayerWallet.WinReward : 0);
 
-        Place(NewText("Kills", row, combatant.kills.ToString(), 40f, Color.white, TextAlignmentOptions.Center).rectTransform, 488f, 0f, 170f, RowHeight - 8f);
+        Place(NewText("Kills", row, combatant.humanKills.ToString(), 40f, Color.white, TextAlignmentOptions.Center).rectTransform, 488f, 0f, 170f, RowHeight - 8f);
         Place(NewText("Wins", row, MatchManager.GetScore(combatant.slot).ToString(), 40f, Color.white, TextAlignmentOptions.Center).rectTransform, 668f, 0f, 170f, RowHeight - 8f);
         Place(NewText("Coins", row, combatant.isBot ? "-" : "+" + coins, 40f, combatant.isBot ? new Color(1f, 1f, 1f, 0.5f) : Gold, TextAlignmentOptions.Center).rectTransform, 848f, 0f, 170f, RowHeight - 8f);
     }

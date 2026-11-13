@@ -36,6 +36,7 @@ public static class OnlineMatch
     const string PickupMessage = "bomba.pickup";
     const string EndMessage = "bomba.end";
     const string LeaveMessage = "bomba.leave";
+    const string EmoteMessage = "bomba.emote";
 
     public static bool Active { get; private set; }
     public static int Seed { get; private set; }
@@ -239,6 +240,7 @@ public static class OnlineMatch
         handlersOn.RegisterNamedMessageHandler(PickupMessage, OnPickup);
         handlersOn.RegisterNamedMessageHandler(EndMessage, OnEnd);
         handlersOn.RegisterNamedMessageHandler(LeaveMessage, OnLeave);
+        handlersOn.RegisterNamedMessageHandler(EmoteMessage, OnEmote);
     }
 
     // Wysyła wiadomość wszystkim: host od razu, klient przez hosta (host przekazuje ją dalej w handlerze).
@@ -419,6 +421,42 @@ public static class OnlineMatch
         if (Active && MatchManager.Instance != null && NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
         {
             MatchManager.Instance.OnlineEnd(winnerId);
+        }
+    }
+
+    // --- emotki ---
+
+    public static void SendEmote(int emote)
+    {
+        using (FastBufferWriter writer = PackEmote(MyId, emote))
+        {
+            Relay(EmoteMessage, writer);
+        }
+    }
+
+    static FastBufferWriter PackEmote(string id, int emote)
+    {
+        FastBufferWriter writer = new FastBufferWriter(64, Allocator.Temp);
+        writer.WriteValueSafe(id);
+        writer.WriteValueSafe(emote);
+        return writer;
+    }
+
+    static void OnEmote(ulong sender, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string id);
+        reader.ReadValueSafe(out int emote);
+
+        using (FastBufferWriter writer = PackEmote(id, emote))
+        {
+            Forward(EmoteMessage, writer, sender);
+        }
+
+        OnlineSlot slot = Players.Find(p => p.id == id);
+
+        if (Active && id != MyId && slot != null && slot.slot > 0 && emote >= 0 && emote < Emotes.Count)
+        {
+            Emotes.Show(slot.slot, (Emote)emote);
         }
     }
 

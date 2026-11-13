@@ -181,6 +181,39 @@ public class PlayerVisual : MonoBehaviour
         bodyTransform.localRotation = Quaternion.Euler(0f, 0f, currentTilt);
     }
 
+    // Kolejność rysowania względem bloków. Postać jest szersza niż jedno pole, więc jej ręce i uszy nachodzą na pola obok.
+    // Sama wysokość na planszy nie wystarcza: stojąc równo w rzędzie postać remisowała ze ścianami z tego rzędu (raz była
+    // przed nimi, raz za nimi), a idąc w górę korytarzem chowała się za ściany, które miała po bokach.
+    // Dlatego liczymy "rząd stóp": najniższy rząd, którego dotyka pole postaci. Postać rysuje się przed wszystkimi blokami
+    // z tego rzędu i wyższych (ściany obok nie wcinają się w ręce), ale za blokami z rzędów poniżej (efekt 2.5D zostaje:
+    // blok stojący bliżej kamery zasłania jej nogi).
+    // Wynik wpisujemy w pozycję Z postaci. Kamera patrzy prosto, więc Z nie przesuwa nic na ekranie, a oś sortowania
+    // w Renderer2D to (0, 1, 1), czyli o kolejności decyduje suma Y + Z.
+    const float FrontOfRow = 0.2f;
+
+    void LateUpdate()
+    {
+        if (movement == null)
+        {
+            return;
+        }
+
+        Transform root = movement.transform;
+        Vector3 position = root.position;
+        root.position = new Vector3(position.x, position.y, SortDepth(position.y));
+    }
+
+    // Pozycja Z dla postaci stojącej na wysokości y (środek jej pola), patrz opis wyżej.
+    public static float SortDepth(float y)
+    {
+        float footRow = Mathf.Floor(y - 0.5f + 0.001f);
+        float inRow = Mathf.Clamp01(y - 0.5f - footRow);
+
+        // dwie postacie w tym samym rzędzie: ta niżej jest z przodu
+        float sortY = footRow + 0.5f - FrontOfRow + inRow * 0.1f;
+        return sortY - y;
+    }
+
     Sprite SpriteFor(Facing facing)
     {
         switch (facing)

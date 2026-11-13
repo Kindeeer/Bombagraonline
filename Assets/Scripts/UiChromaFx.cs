@@ -48,7 +48,7 @@ public class UiChromaFx : ChromaFxEmitter
         return true;
     }
 
-    protected override void CreateView(Particle particle, int spriteKind)
+    protected override void CreateView(Particle particle, Sprite sprite)
     {
         if (holder == null)
         {
@@ -63,7 +63,7 @@ public class UiChromaFx : ChromaFxEmitter
         view.transform.SetParent(holder, false);
 
         Image image = view.GetComponent<Image>();
-        image.sprite = ChromaFx.SpriteOf(spriteKind);
+        image.sprite = sprite;
         image.raycastTarget = false;
         particle.view = view;
     }

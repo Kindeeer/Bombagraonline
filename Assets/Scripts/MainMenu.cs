@@ -84,6 +84,8 @@ public partial class MainMenu : MonoBehaviour
 
     public static void Open()
     {
+        // logowanie do usług online zaczyna się w tle od razu, żeby HOST i JOIN nie czekały na nie po kliknięciu
+        OnlineSession.Warmup();
         Ensure().Show();
     }
 
@@ -737,6 +739,7 @@ public partial class MainMenu : MonoBehaviour
         Sprite sprite = shown.Front != null ? shown.Front : shown.Portrait;
         preview.sprite = sprite != null ? sprite : PickupArt.Face(false);
         preview.preserveAspect = true;
+        ShowPattern(preview, shown.Front != null ? shown.fx : default);
 
         TextMeshProUGUI nameText = card.transform.Find("Name").GetComponent<TextMeshProUGUI>();
         nameText.text = string.IsNullOrWhiteSpace(skin.label) ? "Skin " + (index + 1) : Loc.SkinName(skin.label);

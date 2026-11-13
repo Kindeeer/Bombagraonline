@@ -60,22 +60,43 @@ public class SkinChroma
     [Tooltip("Losowe kolory tęczy zamiast dwóch kolorów efektu.")]
     public bool effectRainbow;
     [Range(0.2f, 3f)] public float effectStrength = 1f;
-    [Tooltip("Połysk jak zaklęcie w Minecrafcie (shader): po postaci przesuwają się pasy światła.")]
+    [Tooltip("Nieużywane (dawny połysk z pasów światła). Teraz każda chroma ma wzór z ikonek poniżej.")]
     public bool glint;
     public Color glintColor = new Color(0.7f, 0.5f, 1f);
     public bool glintRainbow;
 
-    public ChromaFxLook Fx => new ChromaFxLook
+    [Header("Wzór na postaci (ikonki zsuwające się po ciele)")]
+    [Tooltip("Główna ikonka wzoru. Auto = pasująca do efektu powyżej.")]
+    public ChromaIcon pattern = ChromaIcon.Auto;
+    [Tooltip("Druga ikonka, wmieszana między główne. Auto = bez drugiej.")]
+    public ChromaIcon pattern2 = ChromaIcon.Auto;
+
+    public ChromaFxLook Fx
     {
-        effect = effect,
-        colorA = effectColor,
-        colorB = effectColor2,
-        rainbow = effectRainbow,
-        strength = effectStrength,
-        glint = glint,
-        glintColor = glintColor,
-        glintRainbow = glintRainbow
-    };
+        get
+        {
+            // kolory ikonek: kolory efektu, a gdy chroma go nie ma, jasny i środkowy kolor jej palety
+            bool effectColors = effect != ChromaEffect.None && !effectRainbow;
+            Color lightColor = mode == ChromaMode.Vertical ? Color.Lerp(light, light2, 0.5f) : light;
+            Color midColor = mode == ChromaMode.Vertical ? Color.Lerp(mid, mid2, 0.5f) : mid;
+
+            return new ChromaFxLook
+            {
+                effect = effect,
+                colorA = effectColor,
+                colorB = effectColor2,
+                rainbow = effectRainbow,
+                strength = effectStrength,
+                glint = true,
+                glintColor = glintColor,
+                glintRainbow = glintRainbow || effectRainbow || mode == ChromaMode.Rainbow,
+                patternA = pattern != ChromaIcon.Auto ? ChromaFx.KindOf(pattern) : ChromaFx.KindOf(effect),
+                patternB = ChromaFx.KindOf(pattern2),
+                patternColorA = effectColors ? effectColor : lightColor,
+                patternColorB = effectColors ? effectColor2 : Color.Lerp(midColor, lightColor, 0.35f)
+            };
+        }
+    }
 
     [Header("Własne grafiki chromy (opcjonalnie, puste = przekolorowanie z kodu)")]
     public Sprite front;
@@ -139,6 +160,18 @@ public class SkinChroma
                 chroma.glint = true;
                 chroma.glintColor = color;
                 chroma.glintRainbow = rainbow;
+            }
+        }
+    }
+
+    static void SetPattern(string label, ChromaIcon icon, ChromaIcon second = ChromaIcon.Auto)
+    {
+        foreach (SkinChroma chroma in defaults)
+        {
+            if (chroma.label == label)
+            {
+                chroma.pattern = icon;
+                chroma.pattern2 = second;
             }
         }
     }
@@ -266,6 +299,33 @@ public class SkinChroma
                 SetGlint("Tęczowy", Color.white, true);
                 SetGlint("Pastelowa tęcza", Color.white, true);
                 SetGlint("Supernowa", Color.white, true);
+
+                // wzór na postaci: każda chroma ma własny zestaw ikonek (kolory bierze z efektu albo z palety)
+                SetPattern("Fioletowy", ChromaIcon.Gem);
+                SetPattern("Lodowy", ChromaIcon.Snowflake, ChromaIcon.Gem);
+                SetPattern("Złoty", ChromaIcon.Sparkle, ChromaIcon.Star);
+                SetPattern("Tęczowy", ChromaIcon.Star, ChromaIcon.Heart);
+                SetPattern("Czekoladowy", ChromaIcon.Drop, ChromaIcon.Heart);
+                SetPattern("Srebrny", ChromaIcon.Sparkle);
+                SetPattern("Szron", ChromaIcon.Snowflake);
+                SetPattern("Zorza", ChromaIcon.Sparkle, ChromaIcon.Moon);
+                SetPattern("Diamentowy", ChromaIcon.Gem, ChromaIcon.Sparkle);
+                SetPattern("Żar", ChromaIcon.Flame);
+                SetPattern("Ognisty", ChromaIcon.Flame, ChromaIcon.Sparkle);
+                SetPattern("Magma", ChromaIcon.Drop, ChromaIcon.Flame);
+                SetPattern("Feniks", ChromaIcon.Flame, ChromaIcon.Star);
+                SetPattern("Leśny", ChromaIcon.Leaf);
+                SetPattern("Toksyczny", ChromaIcon.Bubble, ChromaIcon.Drop);
+                SetPattern("Jesień", ChromaIcon.Leaf, ChromaIcon.Drop);
+                SetPattern("Kwiecisty", ChromaIcon.Flower, ChromaIcon.Leaf);
+                SetPattern("Truskawkowy", ChromaIcon.Heart);
+                SetPattern("Jagodowy", ChromaIcon.Bubble, ChromaIcon.Heart);
+                SetPattern("Wata cukrowa", ChromaIcon.Heart, ChromaIcon.Bubble);
+                SetPattern("Pastelowa tęcza", ChromaIcon.Heart, ChromaIcon.Flower);
+                SetPattern("Nocny", ChromaIcon.Moon, ChromaIcon.Star);
+                SetPattern("Neonowy", ChromaIcon.Bolt, ChromaIcon.Sparkle);
+                SetPattern("Galaktyka", ChromaIcon.Star, ChromaIcon.Moon);
+                SetPattern("Supernowa", ChromaIcon.Star, ChromaIcon.Bolt);
             }
 
             return defaults;

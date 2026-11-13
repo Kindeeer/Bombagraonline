@@ -82,6 +82,100 @@ public static class OnlineSession
         session = null;
         refreshNeeded = false;
         ended = false;
+        signInTask = null;
+        regionTask = null;
+        bestRegion = null;
+    }
+
+    // ---------- Rozgrzewka (żeby HOST i JOIN działały szybciej) ----------
+
+    // Logowanie i pomiar najbliższego serwera trwają kilka sekund. Robimy je w tle zaraz po otwarciu menu,
+    // więc zanim gracz kliknie HOST albo JOIN, zwykle są już gotowe i zostaje samo założenie pokoju.
+    const string RegionKey = "relay_region";
+    const string RegionDayKey = "relay_region_day";
+    const int RegionValidDays = 3;
+
+    static Task<string> signInTask;
+    static Task regionTask;
+    static string bestRegion;
+
+    public static void Warmup()
+    {
+        _ = WarmupAsync();
+    }
+
+    static async Task WarmupAsync()
+    {
+        if (await SignInOnceAsync() == null)
+        {
+            await FindRegionOnceAsync();
+        }
+    }
+
+    // Jedno logowanie naraz: kliknięcie HOST w trakcie rozgrzewki czeka na to samo logowanie, zamiast zaczynać drugie.
+    static Task<string> SignInOnceAsync()
+    {
+        if (signInTask == null || (signInTask.IsCompleted && (signInTask.IsFaulted || signInTask.Result != null)))
+        {
+            signInTask = SignInAsync();
+        }
+
+        return signInTask;
+    }
+
+    static Task FindRegionOnceAsync()
+    {
+        if (regionTask == null)
+        {
+            regionTask = FindRegionAsync();
+        }
+
+        return regionTask;
+    }
+
+    // Najbliższy serwer Relay (ten z najmniejszym opóźnieniem). Bez tego pomiar robiłby się dopiero po kliknięciu HOST.
+    static async Task FindRegionAsync()
+    {
+        try
+        {
+            List<string> ids = new List<string>();
+
+            foreach (Unity.Services.Relay.Models.Region region in await Unity.Services.Relay.RelayService.Instance.ListRegionsAsync())
+            {
+                ids.Add(region.Id);
+            }
+
+            IList<Unity.Services.Qos.IQosResult> results = await Unity.Services.Qos.QosService.Instance.GetSortedQosResultsAsync("relay", ids);
+
+            if (results != null && results.Count > 0 && !string.IsNullOrEmpty(results[0].Region))
+            {
+                bestRegion = results[0].Region;
+                PlayerPrefs.SetString(RegionKey, bestRegion);
+                PlayerPrefs.SetInt(RegionDayKey, Today());
+                PlayerPrefs.Save();
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.Log("OnlineSession: pomiar serwerów nieudany, wybierze je sama usługa: " + exception.Message);
+        }
+    }
+
+    static int Today()
+    {
+        return (int)(DateTime.UtcNow - new DateTime(2020, 1, 1)).TotalDays;
+    }
+
+    // Zmierzony teraz albo zapamiętany z ostatnich dni. null = usługa zmierzy sama (wolniej).
+    static string KnownRegion()
+    {
+        if (!string.IsNullOrEmpty(bestRegion))
+        {
+            return bestRegion;
+        }
+
+        string saved = PlayerPrefs.GetString(RegionKey, "");
+        return saved.Length > 0 && Today() - PlayerPrefs.GetInt(RegionDayKey, 0) <= RegionValidDays ? saved : null;
     }
 
     // true raz po każdej zmianie w sesji (ktoś dołączył, wyszedł, zmienił skin albo host zmienił zasady).
@@ -135,28 +229,36 @@ public static class OnlineSession
     // Zakłada pokój i zapisuje w nim zasady hosta. Kod pokoju jest potem w OnlineSession.Code.
     public static async Task<string> HostAsync(LobbySettings rules)
     {
-        string error = await SignInAsync();
+        string error = await SignInOnceAsync();
 
         if (error != null)
         {
             return error;
         }
 
+        LobbyNet.EnsureManager();
+        string region = KnownRegion();
+
         try
         {
-            LobbyNet.EnsureManager();
-
-            SessionOptions options = new SessionOptions
+            Attach(await CreateAsync(rules, region));
+            return null;
+        }
+        catch (Exception exception)
+        {
+            if (region == null)
             {
-                MaxPlayers = 4,
-                IsPrivate = true
-            }.WithRelayNetwork();
+                return Short(exception);
+            }
+        }
 
-            options.PlayerProperties = MyProperties();
-            options.SessionProperties[RulesKey] = new SessionProperty(JsonUtility.ToJson(rules), VisibilityPropertyOptions.Member);
+        // zapamiętany serwer mógł zniknąć: zapominamy go i próbujemy jeszcze raz z wyborem po stronie usługi
+        bestRegion = null;
+        PlayerPrefs.DeleteKey(RegionKey);
 
-            IHostSession host = await MultiplayerService.Instance.CreateSessionAsync(options);
-            Attach(host);
+        try
+        {
+            Attach(await CreateAsync(rules, null));
             return null;
         }
         catch (Exception exception)
@@ -165,9 +267,22 @@ public static class OnlineSession
         }
     }
 
+    static Task<IHostSession> CreateAsync(LobbySettings rules, string region)
+    {
+        SessionOptions options = new SessionOptions
+        {
+            MaxPlayers = 4,
+            IsPrivate = true
+        }.WithRelayNetwork(region);
+
+        options.PlayerProperties = MyProperties();
+        options.SessionProperties[RulesKey] = new SessionProperty(JsonUtility.ToJson(rules), VisibilityPropertyOptions.Member);
+        return MultiplayerService.Instance.CreateSessionAsync(options);
+    }
+
     public static async Task<string> JoinAsync(string code)
     {
-        string error = await SignInAsync();
+        string error = await SignInOnceAsync();
 
         if (error != null)
         {
@@ -177,9 +292,11 @@ public static class OnlineSession
         try
         {
             LobbyNet.EnsureManager();
-            ISession joined = await MultiplayerService.Instance.JoinSessionByCodeAsync(code);
+
+            // nick, skin i chroma lecą razem z dołączeniem (bez osobnego zapisu po wejściu)
+            JoinSessionOptions options = new JoinSessionOptions { PlayerProperties = MyProperties() };
+            ISession joined = await MultiplayerService.Instance.JoinSessionByCodeAsync(code, options);
             Attach(joined);
-            await SaveMyDataAsync();
             return null;
         }
         catch (Exception exception)

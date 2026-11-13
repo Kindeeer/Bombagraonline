@@ -1,7 +1,8 @@
 using UnityEngine;
 
-// Połysk "zaklęcia" na postaci w grze (jak w Minecrafcie): druga warstwa z tym samym sprite'em i shaderem BombGame/EnchantGlint,
-// po której przesuwają się pasy światła. Warstwa sama podąża za sprite'em postaci (kierunek, kołysanie, rozmiar).
+// Wzór chromy na postaci w grze: druga warstwa z tym samym sprite'em i shaderem BombGame/EnchantGlint, po której zsuwają się
+// półprzezroczyste ikonki chromy (listki, płomyki, serduszka...). Warstwa sama podąża za sprite'em postaci (kierunek,
+// kołysanie, rozmiar). Kafelek wzoru składa ChromaFx.Pattern z ikonek i kolorów danej chromy.
 public class EnchantGlint : MonoBehaviour
 {
     public const string ShaderName = "BombGame/EnchantGlint";
@@ -9,6 +10,7 @@ public class EnchantGlint : MonoBehaviour
     SpriteRenderer body;
     SpriteRenderer glint;
     Material material;
+    Sprite shownSprite;
     bool wanted;
 
     public void Configure(SpriteRenderer bodyRenderer, ChromaFxLook look)
@@ -45,9 +47,43 @@ public class EnchantGlint : MonoBehaviour
             glint.sharedMaterial = material;
         }
 
-        material.SetColor("_GlintColor", look.glintColor);
-        material.SetFloat("_Rainbow", look.glintRainbow ? 1f : 0f);
+        Apply(material, look);
+        shownSprite = null;
         Follow();
+    }
+
+    // Wpisuje w materiał wzór danej chromy (wspólne dla postaci w grze i obrazka w interfejsie).
+    public static void Apply(Material target, ChromaFxLook look)
+    {
+        target.SetTexture("_PatternTex", ChromaFx.Pattern(look));
+        target.SetFloat("_Rainbow", look.glintRainbow || look.rainbow ? 1f : 0f);
+    }
+
+    // Mówi shaderowi, który kawałek tekstury zajmuje sprite i jakie ma proporcje, żeby ikonki nie były rozciągnięte.
+    public static void ApplySprite(Material target, Sprite sprite)
+    {
+        if (sprite == null || sprite.texture == null)
+        {
+            return;
+        }
+
+        Rect rect;
+
+        try
+        {
+            rect = sprite.textureRect;
+        }
+        catch (System.Exception)
+        {
+            // sprite ciasno upakowany w atlasie: bierzemy całą teksturę
+            rect = new Rect(0f, 0f, sprite.texture.width, sprite.texture.height);
+        }
+
+        float width = sprite.texture.width;
+        float height = sprite.texture.height;
+
+        target.SetVector("_UvRect", new Vector4(rect.x / width, rect.y / height, rect.width / width, rect.height / height));
+        target.SetFloat("_Aspect", rect.height > 0f ? rect.width / rect.height : 1f);
     }
 
     void LateUpdate()
@@ -75,6 +111,12 @@ public class EnchantGlint : MonoBehaviour
         glint.sortingLayerID = body.sortingLayerID;
         glint.sortingOrder = body.sortingOrder + 1;
         glint.color = new Color(1f, 1f, 1f, body.color.a);
+
+        if (body.sprite != shownSprite)
+        {
+            shownSprite = body.sprite;
+            ApplySprite(material, shownSprite);
+        }
     }
 
     void OnDestroy()
