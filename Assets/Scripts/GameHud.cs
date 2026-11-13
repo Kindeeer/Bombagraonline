@@ -271,8 +271,30 @@ public class GameHud : MonoBehaviour
             target.emoteText.text = text ?? "";
         }
 
+        HideEmoteBackground(target);
         target.emoteBubble.SetActive(true);
         emoteUntil[slot] = Time.unscaledTime + seconds;
+    }
+
+    // Dymek emotki na karcie gracza nie ma tła: zostaje sama emotka (i ewentualny napis). Tło i jego cień lub obwódka
+    // z Hierarchii są wyłączane z kodu, więc nie trzeba nic zmieniać w scenie.
+    static void HideEmoteBackground(PlayerSlot slot)
+    {
+        foreach (Image image in slot.emoteBubble.GetComponentsInChildren<Image>(true))
+        {
+            if (image != slot.emoteIcon)
+            {
+                image.enabled = false;
+            }
+        }
+
+        foreach (Shadow shadow in slot.emoteBubble.GetComponentsInChildren<Shadow>(true))
+        {
+            if (slot.emoteIcon == null || shadow.gameObject != slot.emoteIcon.gameObject)
+            {
+                shadow.enabled = false;
+            }
+        }
     }
 
     [ContextMenu("Test emotki (gracz 1)")]
@@ -292,9 +314,22 @@ public class GameHud : MonoBehaviour
         {
             PlayerSlot slot = playerSlots[i];
 
-            if (slot != null && slot.emoteBubble != null && slot.emoteBubble.activeSelf && Time.unscaledTime >= emoteUntil[i])
+            if (slot == null || slot.emoteBubble == null || !slot.emoteBubble.activeSelf)
+            {
+                continue;
+            }
+
+            bool finished = Time.unscaledTime >= emoteUntil[i];
+
+            if (finished)
             {
                 slot.emoteBubble.SetActive(false);
+            }
+
+            // emotka stoi w miejscu nazwy gracza, więc na czas emotki nazwa znika (inaczej nachodziłyby na siebie)
+            if (slot.label != null)
+            {
+                slot.label.alpha = finished ? 1f : 0f;
             }
         }
     }
