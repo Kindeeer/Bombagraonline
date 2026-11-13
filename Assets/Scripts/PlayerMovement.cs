@@ -90,7 +90,10 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // na starcie rundy (do napisu GO!) i podczas celowania atomówką postać stoi w miejscu
-        if (MatchManager.InputLocked || Frozen)
+        // klątwa zamrożenia też zatrzymuje postać (gracza i bota)
+        PlayerPickups curse = PickupsOf();
+
+        if (MatchManager.InputLocked || Frozen || (curse != null && curse.Frozen))
         {
             IsMoving = false;
             return;

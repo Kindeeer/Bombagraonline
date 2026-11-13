@@ -181,6 +181,12 @@ public static class PickupArt
                 return Build("icon_bombstorm", 64, 64, ppu, center, DrawBombStorm);
             case PickupIcon.Nuke:
                 return Build("icon_nuke", 64, 64, ppu, center, DrawNuke);
+            case PickupIcon.Snail:
+                return Build("icon_snail", 64, 64, ppu, center, DrawSnail);
+            case PickupIcon.Ice:
+                return Build("icon_ice", 64, 64, ppu, center, DrawIce);
+            case PickupIcon.Drill:
+                return Build("icon_drill", 64, 64, ppu, center, DrawDrill);
             default:
                 return null;
         }
@@ -210,6 +216,34 @@ public static class PickupArt
         l.Outlined(boot, new Color(0.78f, 0.47f, 0.22f), Outline, 1.6f);
         l.Draw(Box(x, y, 34f, 15f, 15f, 2.2f), new Color(0.25f, 0.15f, 0.08f));
         l.Draw(Box(x, y, 27f, 47f, 8f, 2.5f), new Color(0.95f, 0.9f, 0.8f));
+    }
+
+    // Ślimak (klątwa spowolnienia): zielone ciało z czułkami i brązowa muszla.
+    static void DrawSnail(Layers l, float x, float y)
+    {
+        Color body = new Color(0.72f, 0.88f, 0.42f);
+
+        l.Outlined(Mathf.Min(Capsule(x, y, 50f, 31f, 48f, 41f, 1.3f), Capsule(x, y, 53f, 31f, 57f, 40f, 1.3f)), body, Outline, 1f);
+        l.Outlined(Mathf.Min(Capsule(x, y, 13f, 18f, 50f, 18f, 5f), Capsule(x, y, 49f, 18f, 52f, 30f, 3.8f)), body, Outline, 1.5f);
+        l.Outlined(Circle(x, y, 28f, 31f, 14f), new Color(0.86f, 0.56f, 0.30f), Outline, 1.5f);
+        l.Draw(Mathf.Abs(Circle(x, y, 28f, 31f, 7f)) - 1.3f, new Color(0.55f, 0.30f, 0.15f));
+    }
+
+    // Płatek lodu (klątwa zamrożenia): trzy skrzyżowane ramiona.
+    static void DrawIce(Layers l, float x, float y)
+    {
+        float flake = Mathf.Min(Capsule(x, y, 32f, 11f, 32f, 53f, 2.6f),
+            Mathf.Min(Capsule(x, y, 14f, 21f, 50f, 43f, 2.6f), Capsule(x, y, 14f, 43f, 50f, 21f, 2.6f)));
+        l.Outlined(flake, new Color(0.60f, 0.90f, 1f), Outline, 1.5f);
+        l.Draw(Circle(x, y, 32f, 32f, 4f), Color.white);
+    }
+
+    // Bomba przebijająca: bomba z niebieską obwódką i strzałką, która przez nią przechodzi.
+    static void DrawDrill(Layers l, float x, float y)
+    {
+        l.Outlined(Circle(x, y, 27f, 30f, 16f), new Color(0.16f, 0.16f, 0.20f), new Color(0.40f, 0.80f, 1f), 2.2f);
+        float arrow = Mathf.Min(Capsule(x, y, 8f, 30f, 50f, 30f, 2.6f), RotatedBox(x, y, 52f, 30f, 5.5f, 5.5f, 45f));
+        l.Outlined(arrow, new Color(0.55f, 0.92f, 1f), Outline, 1.3f);
     }
 
     static void DrawBolt(Layers l, float x, float y)

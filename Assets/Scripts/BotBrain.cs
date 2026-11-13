@@ -46,7 +46,7 @@ public static class DangerMap
         // reakcja łańcuchowa nic tu nie zmienia: każda bomba i tak jest na liście, a suma zasięgów to cały obszar
         foreach (Bomb bomb in BombRegistry.All)
         {
-            BlastCalculator.Calculate(bomb.Cell, bomb.Range, scratch);
+            BlastCalculator.Calculate(bomb.Cell, bomb.Range, scratch, bomb.piercing);
 
             foreach (Vector2Int cell in scratch.flameCells)
             {

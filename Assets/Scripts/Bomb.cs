@@ -37,6 +37,9 @@ public class Bomb : MonoBehaviour
 
     // Slot gracza, który postawił bombę (0 = ja, -1 = bot albo cudzy gracz). Płomienie to pamiętają, żeby liczyć zabójstwa.
     [System.NonSerialized] public int ownerSlot = -1;
+    // Bomba przebijająca: wybuch nie zatrzymuje się na blokach do zniszczenia (niszczy wszystkie po drodze).
+    [System.NonSerialized] public bool piercing;
+    static readonly Color PierceTint = new Color(0.55f, 0.85f, 1f);
     public Vector2Int Cell { get; private set; }
     public int Range => range;
     public float TimeLeft => timeLeft;
@@ -114,7 +117,7 @@ public class Bomb : MonoBehaviour
         if (mainSprite != null)
         {
             float flash = timeLeft < 0.8f && Mathf.Sin(Time.time * 24f) > 0f ? 0.5f : 0f;
-            mainSprite.color = Color.Lerp(Color.white, new Color(1f, 0.4f, 0.3f), flash);
+            mainSprite.color = Color.Lerp(piercing ? PierceTint : Color.white, new Color(1f, 0.4f, 0.3f), flash);
         }
     }
 
@@ -258,7 +261,7 @@ public class Bomb : MonoBehaviour
         BombRegistry.Unregister(this);
         GridMap.Instance.SetBomb(Cell, false);
 
-        BlastResult blast = BlastCalculator.Calculate(Cell, range);
+        BlastResult blast = BlastCalculator.Calculate(Cell, range, piercing);
 
         foreach (Vector2Int cell in blast.flameCells)
         {
@@ -339,15 +342,16 @@ public static class BlastCalculator
         Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right
     };
 
-    public static BlastResult Calculate(Vector2Int origin, int range)
+    public static BlastResult Calculate(Vector2Int origin, int range, bool piercing = false)
     {
         BlastResult result = new BlastResult();
-        Calculate(origin, range, result);
+        Calculate(origin, range, result, piercing);
         return result;
     }
 
     // Wersja bez alokacji: czyści i wypełnia podany wynik. Używa jej AI botów kilka razy na sekundę.
-    public static void Calculate(Vector2Int origin, int range, BlastResult result)
+    // piercing = true: wybuch leci dalej przez bloki do zniszczenia (zatrzymują go tylko ściany i inne bomby).
+    public static void Calculate(Vector2Int origin, int range, BlastResult result, bool piercing = false)
     {
         result.Clear();
         result.flameCells.Add(origin);
@@ -369,6 +373,12 @@ public static class BlastCalculator
                 if (TileRules.IsDestructible(tile))
                 {
                     result.blocksToDestroy.Add(cell);
+
+                    if (piercing)
+                    {
+                        continue;
+                    }
+
                     break;
                 }
 

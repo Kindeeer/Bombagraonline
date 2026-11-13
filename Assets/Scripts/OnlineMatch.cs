@@ -304,7 +304,9 @@ public static class OnlineMatch
     {
         NetworkManager manager = NetworkManager.Singleton;
 
-        if (manager == null || !manager.IsServer)
+        // wiadomość wysłana przez samego hosta doszła już do wszystkich (host dostaje też własne wiadomości),
+        // więc nie przekazujemy jej drugi raz
+        if (manager == null || !manager.IsServer || except == NetworkManager.ServerClientId)
         {
             return;
         }
@@ -320,15 +322,15 @@ public static class OnlineMatch
 
     // --- bomby ---
 
-    public static void SendBomb(Vector2Int cell, int range, float fuse)
+    public static void SendBomb(Vector2Int cell, int range, float fuse, bool piercing = false)
     {
-        using (FastBufferWriter writer = PackBomb(MyId, cell, range, fuse))
+        using (FastBufferWriter writer = PackBomb(MyId, cell, range, fuse, piercing))
         {
             Relay(BombMessage, writer);
         }
     }
 
-    static FastBufferWriter PackBomb(string owner, Vector2Int cell, int range, float fuse)
+    static FastBufferWriter PackBomb(string owner, Vector2Int cell, int range, float fuse, bool piercing)
     {
         FastBufferWriter writer = new FastBufferWriter(128, Allocator.Temp);
         writer.WriteValueSafe(owner);
@@ -336,6 +338,7 @@ public static class OnlineMatch
         writer.WriteValueSafe(cell.y);
         writer.WriteValueSafe(range);
         writer.WriteValueSafe(fuse);
+        writer.WriteValueSafe(piercing);
         return writer;
     }
 
@@ -346,10 +349,11 @@ public static class OnlineMatch
         reader.ReadValueSafe(out int y);
         reader.ReadValueSafe(out int range);
         reader.ReadValueSafe(out float fuse);
+        reader.ReadValueSafe(out bool piercing);
 
         Vector2Int cell = new Vector2Int(x, y);
 
-        using (FastBufferWriter writer = PackBomb(owner, cell, range, fuse))
+        using (FastBufferWriter writer = PackBomb(owner, cell, range, fuse, piercing))
         {
             Forward(BombMessage, writer, sender);
         }
@@ -361,6 +365,7 @@ public static class OnlineMatch
 
         Bomb bomb = Object.Instantiate(BombPrefab);
         bomb.Init(cell, fuse, Mathf.Max(1, range));
+        bomb.piercing = piercing;
 
         OnlineSlot ownerInfo = Players.Find(p => p.id == owner);
         bomb.ownerSlot = ownerInfo != null ? ownerInfo.slot : -1;
@@ -579,15 +584,16 @@ public static class OnlineMatch
             return;
         }
 
-        using (FastBufferWriter writer = PackCurse(targetId, definitionName))
+        using (FastBufferWriter writer = PackCurse(MyId, targetId, definitionName))
         {
             Relay(CurseMessage, writer);
         }
     }
 
-    static FastBufferWriter PackCurse(string targetId, string definitionName)
+    static FastBufferWriter PackCurse(string senderId, string targetId, string definitionName)
     {
-        FastBufferWriter writer = new FastBufferWriter(160, Allocator.Temp);
+        FastBufferWriter writer = new FastBufferWriter(224, Allocator.Temp);
+        writer.WriteValueSafe(senderId);
         writer.WriteValueSafe(targetId);
         writer.WriteValueSafe(definitionName);
         return writer;
@@ -595,20 +601,24 @@ public static class OnlineMatch
 
     static void OnCurse(ulong sender, FastBufferReader reader)
     {
+        reader.ReadValueSafe(out string senderId);
         reader.ReadValueSafe(out string targetId);
         reader.ReadValueSafe(out string definitionName);
 
-        using (FastBufferWriter writer = PackCurse(targetId, definitionName))
+        using (FastBufferWriter writer = PackCurse(senderId, targetId, definitionName))
         {
             Forward(CurseMessage, writer, sender);
         }
 
         MatchManager match = MatchManager.Instance;
 
-        if (!Active || match == null || PickupSpawner.Instance == null)
+        // ten, kto rzucił klątwę, pokazał ją już u siebie
+        if (!Active || match == null || PickupSpawner.Instance == null || senderId == MyId)
         {
             return;
         }
+
+        PickupDefinition definition = PickupSpawner.Instance.FindDefinition(definitionName);
 
         foreach (Combatant combatant in match.Slots)
         {
@@ -617,17 +627,13 @@ public static class OnlineMatch
                 continue;
             }
 
-            // fioletowy okrąg widzą wszyscy, ale sama klątwa działa tylko na telefonie trafionego gracza
+            // fioletowy okrąg i efekt widzą wszyscy (u innych to tylko wygląd kopii gracza),
+            // a naprawdę klątwa działa na telefonie trafionego gracza, bo tylko on steruje swoją postacią
             PulseRing.Spawn(combatant.pickups.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
 
-            if (targetId == MyId)
+            if (definition != null)
             {
-                PickupDefinition definition = PickupSpawner.Instance.FindDefinition(definitionName);
-
-                if (definition != null)
-                {
-                    combatant.pickups.Apply(definition);
-                }
+                combatant.pickups.Apply(definition);
             }
         }
     }

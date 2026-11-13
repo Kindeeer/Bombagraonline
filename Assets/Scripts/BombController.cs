@@ -103,10 +103,11 @@ public class BombController : MonoBehaviour
 
         int rangeBonus = 0;
         bool overLimit = false;
+        bool piercing = false;
 
         if (pickups != null)
         {
-            pickups.GetNextBombBonus(out rangeBonus, out overLimit);
+            pickups.GetNextBombBonus(out rangeBonus, out overLimit, out piercing);
         }
 
         bool atLimit = activeBombs >= stats.maxBombs;
@@ -119,13 +120,13 @@ public class BombController : MonoBehaviour
         // bomba ponad limit nie zajmuje miejsca w limicie
         bool countsTowardLimit = !atLimit;
 
-        if (!TryPlaceBomb(stats.blastRange + rangeBonus, countsTowardLimit))
+        if (!TryPlaceBomb(stats.blastRange + rangeBonus, countsTowardLimit, piercing))
         {
             return false;
         }
 
-        // buff zużywa się tylko wtedy, gdy coś dał: dłuższy wybuch albo bombę ponad limit
-        if (pickups != null && (rangeBonus != 0 || !countsTowardLimit))
+        // buff zużywa się tylko wtedy, gdy coś dał: dłuższy wybuch, przebijanie bloków albo bombę ponad limit
+        if (pickups != null && (rangeBonus != 0 || piercing || !countsTowardLimit))
         {
             pickups.ConsumeNextBombBuff();
         }
@@ -142,7 +143,7 @@ public class BombController : MonoBehaviour
 #endif
     }
 
-    bool TryPlaceBomb(int range, bool countsTowardLimit)
+    bool TryPlaceBomb(int range, bool countsTowardLimit, bool piercing)
     {
         Vector2Int cell = GridMap.Instance.WorldToGrid(transform.position);
 
@@ -154,6 +155,7 @@ public class BombController : MonoBehaviour
         Bomb bomb = Instantiate(bombPrefab);
         bomb.Init(cell, stats.fuseTime, Mathf.Max(1, range));
         bomb.ownerSlot = ownerSlot;
+        bomb.piercing = piercing;
 
         // statystyki profilu: bomby postawione przeze mnie
         if (ownerSlot == 0 && movement != null && movement.useKeyboard)
@@ -164,7 +166,7 @@ public class BombController : MonoBehaviour
         // runda online: pozostali gracze stawiają taką samą bombę u siebie
         if (OnlineMatch.Active && movement != null && movement.useKeyboard)
         {
-            OnlineMatch.SendBomb(cell, Mathf.Max(1, range), stats.fuseTime);
+            OnlineMatch.SendBomb(cell, Mathf.Max(1, range), stats.fuseTime, piercing);
         }
 
         if (countsTowardLimit)

@@ -28,12 +28,19 @@ public class PickupDefinition : ScriptableObject
     public int speedSteps;
     [Tooltip("Zmiana długości lontu bomb w sekundach (ujemna = bomby wybuchają szybciej). Permanent/Timed only.")]
     public float fuseChange;
+    [Tooltip("NextBomb only: wybuch następnej bomby przebija się przez wszystkie bloki do zniszczenia na swojej drodze (zatrzymują go tylko ściany).")]
+    public bool piercing;
 
     [Header("Efekt specjalny (tarcza, kopanie bomb, klątwy)")]
     [Tooltip("Permanent: tarcza (kumuluje się poza slotem Buff). Kopanie bomb: liczba kopnięć to pole Uses. Timed: gwiazda, odwrócone sterowanie, automatyczne bomby.")]
     public PickupEffect effect = PickupEffect.None;
     [Tooltip("Timed only.")]
     [Min(0.1f)] public float durationSeconds = 8f;
+    [Tooltip("Klątwa: przedmiot nie działa na tego, kto go podniósł, tylko na najbliższego przeciwnika (jak odwrócone sterowanie).")]
+    public bool curseOpponent;
+
+    // Czy przedmiot po podniesieniu trafia w najbliższego przeciwnika zamiast w podnoszącego.
+    public bool HitsOpponent => curseOpponent || effect == PickupEffect.ReverseControls;
 
     [Header("Special (Space uses it instead of placing a bomb)")]
     public SpecialItem special = SpecialItem.None;
@@ -93,7 +100,9 @@ public enum PickupEffect
     // klątwa: sterowanie jest odwrócone
     ReverseControls,
     // klątwa: postać sama zostawia bomby
-    AutoBombs
+    AutoBombs,
+    // klątwa: postać zamarza i przez chwilę nie może się ruszyć
+    Freeze
 }
 
 // Jak długo działa efekt przedmiotu (dla przedmiotów bez Special).
@@ -126,5 +135,8 @@ public enum PickupIcon
     Dizzy,
     MegaBomb,
     BombStorm,
-    Nuke
+    Nuke,
+    Snail,
+    Ice,
+    Drill
 }

@@ -99,6 +99,8 @@ public class PlayerPickups : MonoBehaviour
     // Klątwy: odwrócone sterowanie i samoczynne stawianie bomb.
     public bool ReverseControls => reverseCount > 0;
     public bool AutoBombs => autoBombCount > 0;
+    // klątwa zamrożenia: postać stoi w miejscu (sprawdza to PlayerMovement)
+    public bool Frozen => frozenCount > 0;
     public bool IsInvincible => Time.time < invincibleUntil;
 
     float invincibleUntil;
@@ -106,6 +108,7 @@ public class PlayerPickups : MonoBehaviour
     float protectedUntil;
     int reverseCount;
     int autoBombCount;
+    int frozenCount;
 
     SpriteRenderer shieldRing;
     SpriteRenderer bodyRenderer;
@@ -163,7 +166,7 @@ public class PlayerPickups : MonoBehaviour
             PlayerProgress.Add(PlayerStat.PickupsCollected);
         }
 
-        if (definition != null && definition.effect == PickupEffect.ReverseControls)
+        if (definition != null && definition.HitsOpponent)
         {
             // runda online: o tym, kto dostaje klątwę, decyduje telefon gracza, który ją podniósł.
             // Kopia cudzego gracza u mnie nic nie robi (jego telefon przyśle wiadomość, kogo trafiło).
@@ -178,6 +181,10 @@ public class PlayerPickups : MonoBehaviour
             {
                 GameAudio.Play(AudioEvent.PickupCollect, transform.position);
                 PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+
+                // u mnie kopia trafionego gracza dostaje klątwę tylko dla wyglądu (np. lodowy kolor),
+                // a naprawdę działa ona na jego telefonie po odebraniu wiadomości
+                victim.Apply(definition);
                 OnlineMatch.SendCurse(victim, definition.name);
                 return;
             }
@@ -378,6 +385,9 @@ public class PlayerPickups : MonoBehaviour
             case PickupEffect.AutoBombs:
                 autoBombCount++;
                 break;
+            case PickupEffect.Freeze:
+                frozenCount++;
+                break;
         }
     }
 
@@ -393,6 +403,9 @@ public class PlayerPickups : MonoBehaviour
                 break;
             case PickupEffect.AutoBombs:
                 autoBombCount = Mathf.Max(0, autoBombCount - 1);
+                break;
+            case PickupEffect.Freeze:
+                frozenCount = Mathf.Max(0, frozenCount - 1);
                 break;
         }
     }
@@ -466,8 +479,9 @@ public class PlayerPickups : MonoBehaviour
             shieldRing.color = new Color(0.55f, 0.85f, 1f, 0.55f);
         }
 
-        // nietykalność: kolory przechodzą przez tęczę, a po jej końcu wracają do zwykłego odcienia
-        if (IsInvincible)
+        // nietykalność: kolory przechodzą przez tęczę; zamrożenie: postać jest lodowo niebieska.
+        // Po końcu efektu kolor wraca do zwykłego odcienia.
+        if (IsInvincible || Frozen)
         {
             if (!wasInvincible)
             {
@@ -475,7 +489,9 @@ public class PlayerPickups : MonoBehaviour
                 wasInvincible = true;
             }
 
-            bodyRenderer.color = Color.HSVToRGB(Mathf.Repeat(Time.time * 2f, 1f), 0.45f, 1f);
+            bodyRenderer.color = IsInvincible
+                ? Color.HSVToRGB(Mathf.Repeat(Time.time * 2f, 1f), 0.45f, 1f)
+                : new Color(0.55f, 0.82f, 1f);
         }
         else if (wasInvincible)
         {
@@ -502,11 +518,12 @@ public class PlayerPickups : MonoBehaviour
     // ---------- Wywoływane przez BombController (Spacja) ----------
 
     // Premia z buffa NextBomb dla następnej bomby.
-    public void GetNextBombBonus(out int rangeBonus, out bool overLimit)
+    public void GetNextBombBonus(out int rangeBonus, out bool overLimit, out bool piercing)
     {
         Occupant occupant = NextBombOccupant();
         rangeBonus = occupant != null ? occupant.definition.extraRange : 0;
         overLimit = occupant != null && occupant.definition.extraBombs > 0;
+        piercing = occupant != null && occupant.definition.piercing;
     }
 
     public void ConsumeNextBombBuff()
