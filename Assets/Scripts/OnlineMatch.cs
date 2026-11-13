@@ -17,6 +17,10 @@ public class OnlineSlot
     public int slot = -1;
     // numer rogu planszy, w którym ta osoba zaczyna (taki sam u wszystkich: kolejność z listy hosta)
     public int spawn;
+    // drużyna w trybie 2 na 2 (0 = niebiescy, 1 = czerwoni, -1 = gra bez drużyn); rozdaje ją host
+    public int team = Teams.None;
+    // pierwszy na liście hosta to host
+    public bool isHost;
 }
 
 // Runda online. Zasada jest prosta: każdy telefon liczy grę sam, ale wszyscy mają to samo.
@@ -123,6 +127,24 @@ public static class OnlineMatch
             slots.Add(new OnlineSlot { id = player.id, nick = player.nick, skin = player.skin, chroma = player.chroma });
         }
 
+        // tryb drużynowy: host rozdziela graczy według ich życzeń z poczekalni (drużyny zostają na kolejne rundy)
+        if (rules.teams)
+        {
+            int[] wishes = new int[players.Count];
+
+            for (int i = 0; i < players.Count; i++)
+            {
+                wishes[i] = players[i].team;
+            }
+
+            int[] teams = Teams.Assign(wishes);
+
+            for (int i = 0; i < slots.Count; i++)
+            {
+                slots[i].team = teams[i];
+            }
+        }
+
         BeginAsHost(Random.Range(1, int.MaxValue), rules, slots);
     }
 
@@ -133,7 +155,7 @@ public static class OnlineMatch
 
         foreach (OnlineSlot player in Players)
         {
-            slots.Add(new OnlineSlot { id = player.id, nick = player.nick, skin = player.skin, chroma = player.chroma });
+            slots.Add(new OnlineSlot { id = player.id, nick = player.nick, skin = player.skin, chroma = player.chroma, team = player.team });
         }
 
         BeginAsHost(Random.Range(1, int.MaxValue), Rules, slots);
@@ -157,6 +179,7 @@ public static class OnlineMatch
                     writer.WriteValueSafe(slot.nick);
                     writer.WriteValueSafe(slot.skin ?? "");
                     writer.WriteValueSafe(slot.chroma);
+                    writer.WriteValueSafe(slot.team);
                 }
 
                 manager.CustomMessagingManager.SendNamedMessageToAll(StartMessage, writer, NetworkDelivery.ReliableFragmentedSequenced);
@@ -181,6 +204,7 @@ public static class OnlineMatch
             reader.ReadValueSafe(out slot.nick);
             reader.ReadValueSafe(out slot.skin);
             reader.ReadValueSafe(out slot.chroma);
+            reader.ReadValueSafe(out slot.team);
             slots.Add(slot);
         }
 
@@ -203,13 +227,18 @@ public static class OnlineMatch
         Players.Clear();
 
         int nextSlot = 1;
+        int[] teamSeats = new int[2];
 
         for (int i = 0; i < slots.Count; i++)
         {
             OnlineSlot slot = slots[i];
             slot.isMe = slot.id == me;
+            slot.isHost = i == 0;
             slot.slot = slot.isMe ? 0 : nextSlot++;
-            slot.spawn = i;
+
+            // w trybie drużynowym niebiescy startują w lewych rogach areny, a czerwoni w prawych
+            bool inTeam = rules != null && rules.teams && slot.team >= 0 && slot.team < 2;
+            slot.spawn = inTeam ? slot.team * 2 + (teamSeats[slot.team]++ % 2) : i;
             Players.Add(slot);
         }
 
@@ -501,7 +530,7 @@ public static class OnlineMatch
             return;
         }
 
-        bool hostLeft = slot.spawn == 0 && !IsHost;
+        bool hostLeft = slot.isHost && !IsHost;
         Players.Remove(slot);
 
         if (MatchManager.Instance != null)

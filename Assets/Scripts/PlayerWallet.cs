@@ -7,6 +7,12 @@ using UnityEngine;
 public static class PlayerWallet
 {
     public const int WinReward = 10;
+    // Tryb 2 na 2: wygrywa cała drużyna, a szansa na wygraną jest dwa razy większa niż w grze każdy na każdego,
+    // więc nagroda na osobę jest o połowę mniejsza (średnio wychodzi tyle samo monet na rundę).
+    public const int TeamWinReward = 5;
+
+    // Nagroda za wygraną w obecnie rozgrywanym trybie.
+    public static int CurrentWinReward => Teams.Active ? TeamWinReward : WinReward;
 
     // Moneta za samo rozegranie rundy (dla każdego gracza, także przegranego).
     public const int RoundReward = 1;

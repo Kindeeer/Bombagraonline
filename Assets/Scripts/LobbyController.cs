@@ -39,6 +39,8 @@ public class LobbyController : MonoBehaviour
         public SpriteRenderer renderer;
         public PlayerSprites look;
         public RectTransform nick;
+        public TextMeshProUGUI nickLabel;
+        public int team;
         public Vector3 target;
         public bool hasTarget;
         public Facing facing;
@@ -54,6 +56,12 @@ public class LobbyController : MonoBehaviour
         new Vector2Int(6, 7), new Vector2Int(10, 7), new Vector2Int(8, 9), new Vector2Int(8, 5)
     };
     RectTransform leaveRect;
+    RectTransform teamRect;
+    Image teamImage;
+    TextMeshProUGUI teamLabel;
+    TextMeshProUGUI myNickLabel;
+    int teamUiShown = -1;
+    float teamPublishAt;
     RectTransform content;
     TextMeshProUGUI toast;
     TextMeshProUGUI modeLabel;
@@ -164,6 +172,7 @@ public class LobbyController : MonoBehaviour
         }
 
         UpdateAvatars();
+        RefreshTeamUi();
 
         FitToArenaWindow();
 
@@ -204,6 +213,66 @@ public class LobbyController : MonoBehaviour
         Anchor(hintText.rectTransform, left + margin, 0.82f, right - margin, 0.93f);
         Anchor(leaveRect, left + margin, 0.92f, left + margin + (right - left) * 0.34f, 0.99f);
 
+        if (teamRect != null)
+        {
+            Anchor(teamRect, left + margin + (right - left) * 0.38f, 0.92f, right - margin, 0.99f);
+        }
+
+    }
+
+    // ---------- Drużyny ----------
+
+    // Czy host włączył tryb drużynowy (host czyta własne ustawienia, pozostali zasady przysłane przez hosta).
+    bool TeamsOn => LobbyState.IsHost ? Settings.teams : LobbyState.RemoteRules != null && LobbyState.RemoteRules.teams;
+
+    // Przycisk wyboru drużyny: OBOJĘTNIE -> NIEBIESCY -> CZERWONI. Życzenie leci do hosta, który przy starcie rozdziela graczy.
+    void ChangeTeam()
+    {
+        LobbyState.MyTeam = (LobbyState.MyTeam + 1) % 3;
+
+        // wybór leci do pozostałych chwilę po ostatnim kliknięciu (żeby nie wysyłać go przy każdym przełączeniu)
+        if (OnlineSession.Connected)
+        {
+            teamPublishAt = Time.unscaledTime + 0.6f;
+        }
+    }
+
+    // Pokazuje przycisk drużyny tylko w trybie drużynowym i koloruje nicki nad głowami według wybranych drużyn.
+    // Wołane co klatkę, ale coś zmienia tylko wtedy, gdy zmienił się tryb albo czyjś wybór.
+    void RefreshTeamUi()
+    {
+        if (teamRect == null)
+        {
+            return;
+        }
+
+        bool on = TeamsOn;
+        int shown = (on ? 10 : 0) + LobbyState.MyTeam;
+
+        if (shown == teamUiShown)
+        {
+            return;
+        }
+
+        teamUiShown = shown;
+        teamRect.gameObject.SetActive(on);
+
+        int mine = LobbyState.MyTeam;
+        teamImage.color = mine > 0 ? Teams.ColorOf(mine - 1) : MenuBuilder.PlumColor;
+        teamLabel.text = Loc.P("DRUŻYNA: ", "TEAM: ") + (mine > 0 ? Teams.NameOf(mine - 1) : Loc.P("OBOJĘTNIE", "ANY"));
+
+        if (myNickLabel != null)
+        {
+            myNickLabel.color = on && mine > 0 ? Teams.ColorOf(mine - 1) : Color.white;
+        }
+
+        foreach (RemoteAvatar avatar in avatars.Values)
+        {
+            if (avatar.nickLabel != null)
+            {
+                avatar.nickLabel.color = on && avatar.team > 0 ? Teams.ColorOf(avatar.team - 1) : Color.white;
+            }
+        }
     }
 
     // ---------- Gracze online ----------
@@ -231,6 +300,12 @@ public class LobbyController : MonoBehaviour
         {
             publishAt = 0f;
             OnlineSession.PublishRules(Settings);
+        }
+
+        if (teamPublishAt > 0f && Time.unscaledTime >= teamPublishAt)
+        {
+            teamPublishAt = 0f;
+            OnlineSession.PublishMyData();
         }
     }
 
@@ -413,6 +488,7 @@ public class LobbyController : MonoBehaviour
                 nick.outlineWidth = 0.3f;
                 nick.outlineColor = new Color32(30, 15, 25, 255);
                 avatar.nick = nick.rectTransform;
+                avatar.nickLabel = nick;
                 avatar.nick.anchorMin = avatar.nick.anchorMax = Vector2.zero;
                 avatar.nick.pivot = new Vector2(0.5f, 0f);
                 avatar.nick.sizeDelta = new Vector2(500f, 70f);
@@ -421,6 +497,10 @@ public class LobbyController : MonoBehaviour
             int skinIndex = Mathf.Max(0, Array.FindIndex(art.players, p => p.label == player.skin));
             PlayerSprites look = art.SkinLook(skinIndex, player.chroma);
             avatar.look = look;
+
+            // drużyna wybrana przez tego gracza (kolor nicku odświeży RefreshTeamUi)
+            avatar.team = player.team;
+            teamUiShown = -1;
 
             if (look != null && avatar.visual != null)
             {
@@ -477,7 +557,10 @@ public class LobbyController : MonoBehaviour
 
     static string Summarize(LobbySettings rules)
     {
-        return Loc.P("Arena: ", "Arena: ") + (rules.arena < 0 ? Loc.P("losowa", "random") : (rules.arena + 1).ToString())
+        return Loc.P("Tryb: ", "Mode: ") + (rules.teams
+                ? Loc.P("drużyny 2 na 2", "teams 2 vs 2") + (rules.friendlyFire ? Loc.P(" (ogień w swoich)", " (friendly fire)") : "")
+                : Loc.P("każdy na każdego", "free for all"))
+            + "\n" + Loc.P("Arena: ", "Arena: ") + (rules.arena < 0 ? Loc.P("losowa", "random") : (rules.arena + 1).ToString())
             + "\n" + Loc.P("Prędkość: x", "Speed: x") + rules.speed.ToString("0.0")
             + "\n" + Loc.P("Wielkość postaci: x", "Character size: x") + rules.size.ToString("0.0")
             + "\n" + Loc.P("Szansa na przedmiot: x", "Item drop chance: x") + rules.dropChance.ToString("0.0")
@@ -511,6 +594,7 @@ public class LobbyController : MonoBehaviour
         nick.name = "Nick";
         nick.outlineWidth = 0.3f;
         nick.outlineColor = new Color32(30, 15, 25, 255);
+        myNickLabel = nick;
         nickRect = nick.rectTransform;
         nickRect.anchorMin = nickRect.anchorMax = Vector2.zero;
         nickRect.pivot = new Vector2(0.5f, 0f);
@@ -560,6 +644,18 @@ public class LobbyController : MonoBehaviour
         Button leave = NewButton(root, Loc.P("WYJDŹ", "LEAVE"), MenuBuilder.PlumColor, Leave, 40f, true);
         leaveRect = (RectTransform)leave.transform;
         Anchor(leaveRect, 0.285f, 0.92f, 0.43f, 0.99f);
+
+        // wybór drużyny (widoczny tylko w trybie drużynowym)
+        Button team = NewButton(root, "", MenuBuilder.PlumColor, ChangeTeam, 34f, true);
+        team.name = "TeamButton";
+        teamRect = (RectTransform)team.transform;
+        teamImage = team.GetComponent<Image>();
+        teamLabel = team.GetComponentInChildren<TextMeshProUGUI>();
+        teamLabel.enableAutoSizing = true;
+        teamLabel.fontSizeMin = 20f;
+        teamLabel.fontSizeMax = 34f;
+        Anchor(teamRect, 0.45f, 0.92f, 0.685f, 0.99f);
+        teamRect.gameObject.SetActive(false);
     }
 
     void ShowToast(string text)
@@ -711,9 +807,14 @@ public class LobbyController : MonoBehaviour
     {
         Func<float, string> times = v => "x" + v.ToString("0.0");
         Func<float, string> whole = v => Mathf.RoundToInt(v).ToString();
+        Func<float, string> onOff = v => v >= 0.5f ? "ON" : "OFF";
 
         SliderSpec[] specs =
         {
+            new SliderSpec { polish = "Drużyny 2 na 2", english = "Teams 2 vs 2", min = 0f, max = 1f, whole = true, format = onOff,
+                get = s => s.teams ? 1f : 0f, set = (s, v) => s.teams = v >= 0.5f },
+            new SliderSpec { polish = "Ogień w swoich (drużyny)", english = "Friendly fire (teams)", min = 0f, max = 1f, whole = true, format = onOff,
+                get = s => s.friendlyFire ? 1f : 0f, set = (s, v) => s.friendlyFire = v >= 0.5f },
             new SliderSpec { polish = "Prędkość graczy", english = "Player speed", min = 0.6f, max = 1.8f, format = times,
                 get = s => s.speed, set = (s, v) => s.speed = v },
             new SliderSpec { polish = "Wielkość postaci", english = "Character size", min = 0.7f, max = 1.5f, format = times,

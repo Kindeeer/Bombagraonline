@@ -523,6 +523,11 @@ public class GameHud : MonoBehaviour
             // karta pojawia się dopiero, gdy ktoś gra danym slotem (pusty slot nic nie pokazuje)
             SetSlotVisible(slot, state != 0);
 
+            // tryb drużynowy: karta ma odcień drużyny gracza
+            Color card = combatant != null && Teams.Active && combatant.team >= 0
+                ? Color.Lerp(cardColor, Teams.ColorOf(combatant.team), 0.5f)
+                : cardColor;
+
             if (state == 0)
             {
                 aliveColor.a = emptySlotAlpha;
@@ -530,11 +535,11 @@ public class GameHud : MonoBehaviour
             }
             else if (state == 2)
             {
-                SetSlot(slot, dead, deadFaceColor, cardColor, Loc.T("hud.dead") + "  " + score, deadColor);
+                SetSlot(slot, dead, deadFaceColor, card, Loc.T("hud.dead") + "  " + score, deadColor);
             }
             else
             {
-                SetSlot(slot, alive, aliveColor, cardColor, MatchManager.NameOf(combatant) + "  " + score, textColor);
+                SetSlot(slot, alive, aliveColor, card, MatchManager.NameOf(combatant) + "  " + score, textColor);
             }
         }
     }

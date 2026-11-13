@@ -13,6 +13,8 @@ public class OnlinePlayer
     public string nick;
     public string skin;
     public int chroma = -1;
+    // drużyna wybrana w poczekalni: 0 = obojętnie, 1 = niebiescy, 2 = czerwoni
+    public int team;
     public bool isHost;
     public bool isMe;
 
@@ -66,6 +68,7 @@ public static class OnlineSession
     const string NickKey = "nick";
     const string SkinKey = "skin";
     const string ChromaKey = "chroma";
+    const string TeamKey = "team";
 
     static ISession session;
     static bool refreshNeeded;
@@ -316,8 +319,15 @@ public static class OnlineSession
         {
             { NickKey, new PlayerProperty(PlayerProfile.Nick, VisibilityPropertyOptions.Member) },
             { SkinKey, new PlayerProperty(skin, VisibilityPropertyOptions.Member) },
-            { ChromaKey, new PlayerProperty(chroma.ToString(), VisibilityPropertyOptions.Member) }
+            { ChromaKey, new PlayerProperty(chroma.ToString(), VisibilityPropertyOptions.Member) },
+            { TeamKey, new PlayerProperty(LobbyState.MyTeam.ToString(), VisibilityPropertyOptions.Member) }
         };
+    }
+
+    // Wysyła pozostałym moje dane po zmianie (np. po wybraniu drużyny w poczekalni).
+    public static async void PublishMyData()
+    {
+        await SaveMyDataAsync();
     }
 
     static async Task SaveMyDataAsync()
@@ -397,6 +407,7 @@ public static class OnlineSession
             };
 
             int.TryParse(ValueOf(player, ChromaKey, "-1"), out entry.chroma);
+            int.TryParse(ValueOf(player, TeamKey, "0"), out entry.team);
             list.Add(entry);
         }
 

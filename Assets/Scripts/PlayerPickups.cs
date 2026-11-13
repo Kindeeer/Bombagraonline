@@ -190,10 +190,13 @@ public class PlayerPickups : MonoBehaviour
 
         PlayerPickups nearest = null;
         float best = float.MaxValue;
+        int mySlot = match.SlotOf(GetComponent<PlayerHealth>());
 
         foreach (Combatant combatant in match.Slots)
         {
-            if (combatant == null || !combatant.IsAlive || combatant.pickups == null || combatant.pickups == this)
+            // klątwy nie trafiają kolegi z drużyny
+            if (combatant == null || !combatant.IsAlive || combatant.pickups == null || combatant.pickups == this
+                || Teams.AlliedSlots(mySlot, combatant.slot))
             {
                 continue;
             }

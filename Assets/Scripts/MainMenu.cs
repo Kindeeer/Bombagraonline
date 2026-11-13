@@ -534,6 +534,72 @@ public partial class MainMenu : MonoBehaviour
         }
     }
 
+    // Przycisk "2 NA 2" na ekranie wyboru liczby graczy: ja i bot kontra dwa boty. Ekran jest zbudowany w scenie,
+    // więc przycisk dokładamy z kodu pod trzema istniejącymi (zmniejszając je tak, żeby cztery zmieściły się w kolumnie).
+    void EnsureTeamsButton()
+    {
+        Transform last = FindDeep(transform, "Button_Bots" + MaxBots);
+
+        if (last == null)
+        {
+            return;
+        }
+
+        RectTransform column = (RectTransform)last.parent;
+        Transform existing = column.Find("Button_Teams");
+
+        if (existing == null)
+        {
+            Button button = NewButton(column, "", new Color(0.80f, 0.32f, 0.45f, 1f), StartTeams, 70f, true);
+            button.name = "Button_Teams";
+            existing = button.transform;
+
+            VerticalLayoutGroup layout = column.GetComponent<VerticalLayoutGroup>();
+
+            if (layout != null)
+            {
+                button.gameObject.AddComponent<LayoutElement>();
+
+                int count = column.childCount;
+                float height = Mathf.Floor((column.rect.height - layout.spacing * (count - 1)) / count);
+
+                foreach (Transform child in column)
+                {
+                    LayoutElement element = child.GetComponent<LayoutElement>();
+
+                    if (element != null && height > 40f)
+                    {
+                        element.preferredHeight = Mathf.Min(element.preferredHeight > 0f ? element.preferredHeight : height, height);
+                    }
+                }
+
+                button.GetComponent<LayoutElement>().preferredHeight = height > 40f ? height : 140f;
+            }
+            else
+            {
+                // kolumna bez automatycznego układu: przycisk staje po prawej stronie ekranu
+                existing.SetParent(pages[Page.Bots], false);
+                Anchor((RectTransform)existing, 0.78f, 0.36f, 0.98f, 0.62f);
+            }
+        }
+
+        TextMeshProUGUI label = existing.GetComponentInChildren<TextMeshProUGUI>();
+
+        if (label != null)
+        {
+            label.text = Loc.P("2 NA 2   (ty i bot kontra 2 boty)", "2 VS 2   (you and a bot vs 2 bots)");
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 30f;
+            label.fontSizeMax = 70f;
+        }
+    }
+
+    void StartTeams()
+    {
+        StartGame(MaxBots);
+        GameRules.UseSoloTeams();
+    }
+
     void Show()
     {
         EnsureEventSystem();
@@ -620,6 +686,7 @@ public partial class MainMenu : MonoBehaviour
         if (page == Page.Bots)
         {
             HighlightBotChoice();
+            EnsureTeamsButton();
         }
 
         if (page == Page.Main)

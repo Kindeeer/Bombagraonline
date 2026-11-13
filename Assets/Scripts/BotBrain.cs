@@ -222,10 +222,12 @@ public class BotBrain : MonoBehaviour
     void CollectEnemies(MatchManager match, GridMap map)
     {
         enemyCount = 0;
+        int mySlot = match.SlotOf(health);
 
         foreach (Combatant other in match.Slots)
         {
-            if (other == null || !other.IsAlive || other.health == health)
+            // kolega z drużyny nie jest przeciwnikiem: bot go nie goni i nie próbuje wysadzić
+            if (other == null || !other.IsAlive || other.health == health || Teams.AlliedSlots(mySlot, other.slot))
             {
                 continue;
             }

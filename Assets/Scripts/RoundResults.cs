@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -36,15 +37,23 @@ public class RoundResults : MonoBehaviour
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 1f;
 
-        int rows = 0;
+        // w trybie drużynowym gracze jednej drużyny stoją obok siebie (najpierw niebiescy, potem czerwoni)
+        List<Combatant> order = new List<Combatant>();
 
         foreach (Combatant combatant in match.Slots)
         {
             if (combatant != null && !combatant.left)
             {
-                rows++;
+                order.Add(combatant);
             }
         }
+
+        if (Teams.Active)
+        {
+            order.Sort((a, b) => a.team != b.team ? a.team.CompareTo(b.team) : a.slot.CompareTo(b.slot));
+        }
+
+        int rows = order.Count;
 
         float height = HeaderHeight + rows * RowHeight + FooterHeight;
 
@@ -60,14 +69,9 @@ public class RoundResults : MonoBehaviour
 
         float y = -HeaderHeight;
 
-        foreach (Combatant combatant in match.Slots)
+        foreach (Combatant combatant in order)
         {
-            if (combatant == null || combatant.left)
-            {
-                continue;
-            }
-
-            AddRow(match, panel, combatant, combatant == winner, y);
+            AddRow(match, panel, combatant, MatchManager.IsWinner(combatant, winner), y);
             y -= RowHeight;
         }
 
@@ -116,6 +120,12 @@ public class RoundResults : MonoBehaviour
         Image background = NewImage("Background", row, isWinner ? new Color(Gold.r, Gold.g, Gold.b, 0.40f) : new Color(slotColor.r, slotColor.g, slotColor.b, 0.22f));
         background.rectTransform.anchorMax = Vector2.one;
 
+        // tryb drużynowy: pasek w kolorze drużyny przy lewej krawędzi wiersza
+        if (Teams.Active && combatant.team >= 0)
+        {
+            Place(NewImage("Team", row, Teams.ColorOf(combatant.team)).rectTransform, 0f, 0f, 8f, RowHeight - 8f);
+        }
+
         // buźka
         GameArt art = GameArt.Instance;
         PlayerSprites look = art != null ? art.PlayerFor(combatant.slot) : null;
@@ -131,7 +141,7 @@ public class RoundResults : MonoBehaviour
         label.overflowMode = TextOverflowModes.Ellipsis;
         Place(label.rectTransform, 90f, 0f, 380f, RowHeight - 8f);
 
-        int coins = PlayerWallet.RoundReward + combatant.humanKills * PlayerWallet.PlayerKillReward + (isWinner && !combatant.isBot ? PlayerWallet.WinReward : 0);
+        int coins = PlayerWallet.RoundReward + combatant.humanKills * PlayerWallet.PlayerKillReward + (isWinner && !combatant.isBot ? PlayerWallet.CurrentWinReward : 0);
 
         Place(NewText("Kills", row, combatant.humanKills.ToString(), 40f, Color.white, TextAlignmentOptions.Center).rectTransform, 488f, 0f, 170f, RowHeight - 8f);
         Place(NewText("Wins", row, MatchManager.GetScore(combatant.slot).ToString(), 40f, Color.white, TextAlignmentOptions.Center).rectTransform, 668f, 0f, 170f, RowHeight - 8f);

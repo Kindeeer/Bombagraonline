@@ -29,6 +29,7 @@ public class PlayerHealth : MonoBehaviour
     public float LastHitAt { get; private set; } = -100f;
 
     bool isDead = false;
+    int slot = -1;
     PlayerPickups pickups;
 
     public bool IsDead => isDead;
@@ -53,9 +54,9 @@ public class PlayerHealth : MonoBehaviour
         {
             Vector2Int remoteCell = GridMap.Instance.WorldToGrid(transform.position);
 
-            if (GridMap.Instance.IsOnFire(remoteCell))
+            if (GridMap.Instance.HarmfulFire(remoteCell, MySlot(), out int remoteOwner))
             {
-                LastHitSlot = GridMap.Instance.FireOwner(remoteCell);
+                LastHitSlot = remoteOwner;
                 LastHitAt = Time.time;
             }
 
@@ -65,9 +66,10 @@ public class PlayerHealth : MonoBehaviour
         // Prawidłowe odczytanie kratki ze środka pozycji gracza (np. z 1.5, 1.5 robimy kratkę 1, 1)
         Vector2Int cell = GridMap.Instance.WorldToGrid(transform.position);
 
-        if (GridMap.Instance.IsOnFire(cell))
+        // w trybie drużynowym ogień z bomby kolegi nie rani (chyba że host włączył "ogień w swoich")
+        if (GridMap.Instance.HarmfulFire(cell, MySlot(), out int fireOwner))
         {
-            LastHitSlot = GridMap.Instance.FireOwner(cell);
+            LastHitSlot = fireOwner;
             LastHitAt = Time.time;
 
             if (godMode)
@@ -88,6 +90,17 @@ public class PlayerHealth : MonoBehaviour
 
             Die();
         }
+    }
+
+    // Mój numer slotu w rundzie (-1, dopóki MatchManager mnie nie zapisał).
+    int MySlot()
+    {
+        if (slot < 0 && MatchManager.Instance != null)
+        {
+            slot = MatchManager.Instance.SlotOf(this);
+        }
+
+        return slot;
     }
 
     // Zabija postać od razu (menu debug).

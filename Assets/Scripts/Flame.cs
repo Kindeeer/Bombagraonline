@@ -9,6 +9,7 @@ public class Flame : MonoBehaviour
     const int SortingBoost = 1;
 
     Vector2Int cell;
+    int owner = -1;
     float timeLeft;
     bool active;
     bool sortingApplied;
@@ -37,6 +38,7 @@ public class Flame : MonoBehaviour
         }
 
         cell = flameCell;
+        owner = ownerSlot;
         timeLeft = duration;
         active = true;
 
@@ -71,7 +73,7 @@ public class Flame : MonoBehaviour
 
         if (GridMap.Instance != null)
         {
-            GridMap.Instance.RemoveFire(cell);
+            GridMap.Instance.RemoveFire(cell, owner);
         }
     }
 }

@@ -28,6 +28,10 @@ public class LobbySettings
     [Tooltip("Po ilu sekundach włącza się CHAOS. Najwięcej = CHAOS wyłączony.")]
     public float chaosSeconds = 75f;
     public int bots = 3;
+    [Tooltip("Tryb drużynowy 2 na 2: wygrywa drużyna, z której ktoś przeżyje.")]
+    public bool teams;
+    [Tooltip("Tryb drużynowy: czy bomby kolegi z drużyny też ranią.")]
+    public bool friendlyFire;
     public List<PickupWeight> weights = new List<PickupWeight>();
 
     public const float ChaosOff = 180f;
@@ -88,25 +92,42 @@ public static class GameRules
     // true, gdy runda gra według ustawień z poczekalni (wtedy startowe wartości graczy są nadpisywane).
     public static bool Custom { get; private set; }
 
+    // gra solo z przycisku "2 NA 2": zwykłe zasady, ale w drużynach
+    static bool soloTeams;
+
     public static LobbySettings Current => current;
+
+    // Czy runda jest drużynowa i czy bomby kolegi z drużyny ranią.
+    public static bool Teams => soloTeams || (Custom && current.teams);
+    public static bool FriendlyFire => Custom && current.friendlyFire;
+
+    // Gra solo w drużynach: ja i bot przeciwko dwóm botom, reszta zasad domyślna.
+    public static void UseSoloTeams()
+    {
+        Reset();
+        soloTeams = true;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
     {
         current = new LobbySettings();
         Custom = false;
+        soloTeams = false;
     }
 
     public static void Use(LobbySettings settings)
     {
         current = settings.Clone();
         Custom = true;
+        soloTeams = false;
     }
 
     public static void Reset()
     {
         current = new LobbySettings();
         Custom = false;
+        soloTeams = false;
     }
 
     public static int WeightFromBlocks(PickupDefinition item)
@@ -167,6 +188,9 @@ public static class LobbyState
     // Zasady hosta widziane przez pozostałych graczy (tylko do odczytu).
     public static LobbySettings RemoteRules { get; set; }
 
+    // Drużyna, którą wybrałem w poczekalni: 0 = obojętnie, 1 = niebiescy, 2 = czerwoni.
+    public static int MyTeam { get; set; }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
     {
@@ -175,6 +199,7 @@ public static class LobbyState
         Code = "";
         Notice = null;
         RemoteRules = null;
+        MyTeam = 0;
         settings = null;
     }
 

@@ -23,6 +23,9 @@ public class Combatant
     public int kills;
     public int humanKills;
 
+    // drużyna w trybie 2 na 2 (0 = niebiescy, 1 = czerwoni, -1 = gra bez drużyn)
+    public int team = Teams.None;
+
     public bool IsAlive => !left && health != null && !health.IsDead;
 }
 
@@ -121,6 +124,29 @@ public class MatchManager : MonoBehaviour
     public static int GetScore(int slot)
     {
         return slot >= 0 && slot < MaxSlots ? scores[slot] : 0;
+    }
+
+    // Numer slotu postaci (-1, gdy nie bierze udziału w rundzie).
+    public int SlotOf(PlayerHealth health)
+    {
+        if (health != null)
+        {
+            foreach (Combatant combatant in Slots)
+            {
+                if (combatant != null && combatant.health == health)
+                {
+                    return combatant.slot;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    // Czy ten uczestnik wygrał rundę: sam zwycięzca albo (w drużynach) każdy z jego drużyny, także ten, kto zginął.
+    public static bool IsWinner(Combatant combatant, Combatant winner)
+    {
+        return winner != null && combatant != null && (combatant == winner || Teams.Allies(combatant, winner));
     }
 
     public static string NameOf(Combatant combatant)
@@ -341,7 +367,8 @@ public class MatchManager : MonoBehaviour
 
         Combatant killer = Slots[killerSlot];
 
-        if (killer == null)
+        // zabicie kolegi z drużyny (przy włączonym "ogniu w swoich") nie liczy się do zabójstw ani monet
+        if (killer == null || Teams.Allies(killer, victim))
         {
             return;
         }
@@ -422,6 +449,12 @@ public class MatchManager : MonoBehaviour
             art.ShuffleBotSkins();
         }
 
+        // tryb drużynowy bez internetu: boty zawsze dopełniają skład do czterech (ja i bot kontra dwa boty)
+        if (Teams.Active && !OnlineMatch.Active)
+        {
+            count = MaxSlots - 1;
+        }
+
         for (int slot = 1; slot <= count && slot < MaxSlots; slot++)
         {
             SpawnBot(human, slot);
@@ -431,6 +464,8 @@ public class MatchManager : MonoBehaviour
     // Wpisuje w każdą postać jej skin (GameArt) i odcień slotu bota. Wołane przy starcie i po wyborze w menu.
     void ApplyLooks()
     {
+        AssignTeams();
+
         // startowe statystyki, rozmiar i prędkość z ustawień poczekalni (puste w zwykłej grze)
         foreach (Combatant combatant in Slots)
         {
@@ -470,6 +505,58 @@ public class MatchManager : MonoBehaviour
                     }
                 }
             }
+        }
+    }
+
+    // Tryb drużynowy: wpisuje każdemu drużynę, kolor drużyny (karta w HUD, strzałki, wyniki) i pierścień pod stopami.
+    // Bez internetu ja i pierwszy bot gramy razem przeciwko dwóm pozostałym botom (startujemy po lewej stronie areny),
+    // a online drużyny rozdaje host i przysyła je razem ze startem rundy.
+    void AssignTeams()
+    {
+        if (!Teams.Active || LobbyState.InLobby)
+        {
+            return;
+        }
+
+        int myTeam = LobbyState.MyTeam == 2 ? Teams.Red : Teams.Blue;
+
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant == null || combatant.health == null)
+            {
+                continue;
+            }
+
+            if (OnlineMatch.Active)
+            {
+                OnlineSlot info = OnlineMatch.SlotInfo(combatant.slot);
+                combatant.team = info != null ? info.team : Teams.None;
+            }
+            else
+            {
+                combatant.team = combatant.slot < 2 ? myTeam : 1 - myTeam;
+            }
+
+            if (combatant.team < 0)
+            {
+                continue;
+            }
+
+            Color color = Teams.ColorOf(combatant.team);
+
+            if (combatant.slot < slotColors.Length)
+            {
+                slotColors[combatant.slot] = color;
+            }
+
+            TeamRing.Attach(combatant.health.gameObject, color);
+        }
+
+        GameHud hud = FindAnyObjectByType<GameHud>();
+
+        if (hud != null)
+        {
+            hud.ForceRefresh();
         }
     }
 
@@ -615,6 +702,9 @@ public class MatchManager : MonoBehaviour
         int total = 0;
         int alive = 0;
         Combatant last = null;
+        bool blueAlive = false;
+        bool redAlive = false;
+        bool anyTeam = false;
 
         foreach (Combatant combatant in Slots)
         {
@@ -624,11 +714,14 @@ public class MatchManager : MonoBehaviour
             }
 
             total++;
+            anyTeam |= combatant.team >= 0;
 
             if (combatant.IsAlive)
             {
                 alive++;
                 last = combatant;
+                blueAlive |= combatant.team == Teams.Blue;
+                redAlive |= combatant.team == Teams.Red;
             }
         }
 
@@ -643,7 +736,10 @@ public class MatchManager : MonoBehaviour
             return;
         }
 
-        if (alive <= 1)
+        // tryb drużynowy: runda trwa, dopóki żyje ktoś z obu drużyn (wygrywa cała drużyna ostatniego żywego)
+        int sidesAlive = Teams.Active && anyTeam ? (blueAlive ? 1 : 0) + (redAlive ? 1 : 0) : alive;
+
+        if (sidesAlive <= 1)
         {
             Combatant winner = last;
 
@@ -686,13 +782,24 @@ public class MatchManager : MonoBehaviour
     {
         RoundOver = true;
 
+        // punkt za rundę: zwycięzca, a w drużynach każdy z wygranej drużyny
         if (winner != null && scorePoint)
         {
-            scores[winner.slot]++;
+            foreach (Combatant combatant in Slots)
+            {
+                if (IsWinner(combatant, winner))
+                {
+                    scores[combatant.slot]++;
+                }
+            }
         }
 
+        bool teamWin = winner != null && Teams.Active && winner.team >= 0;
+
         GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
-        banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "") : Loc.F("round.wins", NameOf(winner));
+        banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "")
+            : teamWin ? Teams.NameOf(winner.team) + Loc.P(" WYGRYWAJĄ RUNDĘ", " WINS THE ROUND")
+            : Loc.F("round.wins", NameOf(winner));
 
         // moneta za rozegraną rundę (każdy gracz u siebie dostaje +1, także po przegranej)
         if (scorePoint)
@@ -707,13 +814,13 @@ public class MatchManager : MonoBehaviour
             string skin = art != null && art.SkinCount > 0 ? art.players[Mathf.Clamp(SkinSelection.Index, 0, art.SkinCount - 1)].label : "";
             Combatant me = Slots[0];
 
-            PlayerProgress.RoundFinished(winner == me, me.humanKills, me.kills - me.humanKills, OnlineMatch.Active, skin);
+            PlayerProgress.RoundFinished(IsWinner(me, winner), me.humanKills, me.kills - me.humanKills, OnlineMatch.Active, skin);
         }
 
-        // monety za wygraną rundę (tylko dla mnie: bot ani cudzy gracz nie dają monet)
-        if (winner != null && scorePoint && !winner.isBot && !winner.remote)
+        // monety za wygraną rundę (tylko dla mnie: bot ani cudzy gracz nie dają monet; w drużynach liczy się wygrana drużyny)
+        if (scorePoint && IsWinner(Slots[0], winner))
         {
-            PlayerWallet.AddCoins(PlayerWallet.WinReward);
+            PlayerWallet.AddCoins(PlayerWallet.CurrentWinReward);
             GameAudio.Play(AudioEvent.CoinGain);
         }
 

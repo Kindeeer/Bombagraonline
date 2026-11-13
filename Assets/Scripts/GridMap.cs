@@ -115,6 +115,10 @@ public class GridMap : MonoBehaviour
     readonly int[] fire = new int[CellCount];
     // kto podpalił pole (numer slotu właściciela bomby, -1 = nikt/nieznany), do liczenia zabójstw
     readonly int[] fireOwner = new int[CellCount];
+    // ile płomieni na polu należy do którego gracza (kolumna 0 = bez właściciela, 1-4 = sloty 0-3);
+    // potrzebne w trybie drużynowym, gdy na jednym polu pali się ogień kolegi i przeciwnika naraz
+    const int OwnerColumns = MatchManager.MaxSlots + 1;
+    readonly int[] fireByOwner = new int[CellCount * OwnerColumns];
     readonly int[] puddleToken = new int[CellCount];
     readonly object[] blockLastHitBy = new object[CellCount];
 
@@ -891,6 +895,7 @@ public class GridMap : MonoBehaviour
                 grid[i] = inside ? TileType.Empty : TileType.SolidWall;
                 bombs[i] = false;
                 fire[i] = 0;
+                System.Array.Clear(fireByOwner, i * OwnerColumns, OwnerColumns);
                 puddleIsCenter[i] = false;
                 crackedBlock[i] = false;
                 blockLastHitBy[i] = null;
@@ -945,13 +950,62 @@ public class GridMap : MonoBehaviour
 
         fire[Index(cell)]++;
         fireOwner[Index(cell)] = owner;
+        fireByOwner[Index(cell) * OwnerColumns + OwnerColumn(owner)]++;
     }
 
     public int FireOwner(Vector2Int cell) => InBounds(cell) ? fireOwner[Index(cell)] : -1;
 
-    public void RemoveFire(Vector2Int cell)
+    // owner musi być ten sam, co przy AddFire (płomień pamięta swojego właściciela).
+    public void RemoveFire(Vector2Int cell, int owner = -1)
     {
-        if (InBounds(cell)) fire[Index(cell)]--;
+        if (!InBounds(cell)) return;
+
+        fire[Index(cell)]--;
+
+        int column = Index(cell) * OwnerColumns + OwnerColumn(owner);
+        fireByOwner[column] = Mathf.Max(0, fireByOwner[column] - 1);
+    }
+
+    static int OwnerColumn(int owner) => owner >= 0 && owner < MatchManager.MaxSlots ? owner + 1 : 0;
+
+    // Czy na polu pali się ogień, który rani gracza ze slotu victimSlot. owner = czyja to bomba (-1 = niczyja).
+    // Poza trybem drużynowym rani każdy ogień. W drużynach ogień kolegi nie rani (chyba że host włączył "ogień w swoich").
+    public bool HarmfulFire(Vector2Int cell, int victimSlot, out int owner)
+    {
+        owner = -1;
+
+        if (!IsOnFire(cell))
+        {
+            return false;
+        }
+
+        int start = Index(cell) * OwnerColumns;
+        int latest = fireOwner[Index(cell)];
+
+        // zwykła gra (albo "ogień w swoich"): każdy ogień rani, dokładnie tak jak przed trybem drużynowym
+        if (!Teams.Active || GameRules.FriendlyFire)
+        {
+            owner = latest;
+            return true;
+        }
+
+        // najpierw ten, kto podpalił pole jako ostatni
+        if (fireByOwner[start + OwnerColumn(latest)] > 0 && Teams.FireHurts(latest, victimSlot))
+        {
+            owner = latest;
+            return true;
+        }
+
+        for (int column = 0; column < OwnerColumns; column++)
+        {
+            if (fireByOwner[start + column] > 0 && Teams.FireHurts(column - 1, victimSlot))
+            {
+                owner = column - 1;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public bool IsOnFire(Vector2Int cell) => InBounds(cell) && fire[Index(cell)] > 0;
