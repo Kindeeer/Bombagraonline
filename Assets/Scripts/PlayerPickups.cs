@@ -99,6 +99,8 @@ public class PlayerPickups : MonoBehaviour
     // Klątwy: odwrócone sterowanie i samoczynne stawianie bomb.
     public bool ReverseControls => reverseCount > 0;
     public bool AutoBombs => autoBombCount > 0;
+    // klątwa zamrożenia: postać stoi w miejscu (sprawdza to PlayerMovement)
+    public bool Frozen => frozenCount > 0;
     public bool IsInvincible => Time.time < invincibleUntil;
 
     float invincibleUntil;
@@ -106,6 +108,7 @@ public class PlayerPickups : MonoBehaviour
     float protectedUntil;
     int reverseCount;
     int autoBombCount;
+    int frozenCount;
 
     SpriteRenderer shieldRing;
     SpriteRenderer bodyRenderer;
@@ -149,8 +152,87 @@ public class PlayerPickups : MonoBehaviour
             return;
         }
 
-        Apply(item.Definition);
+        ApplyCollected(item.Definition);
         item.Collect();
+    }
+
+    // Przedmiot podniesiony z planszy. Klątwa odwracająca sterowanie nie trafia do tego, kto ją podniósł, tylko do najbliższego
+    // żywego przeciwnika. Fioletowy okrąg pokazuje, kto ją dostał. Gdy nie ma żadnego przeciwnika, dostaje ją sam podnoszący.
+    void ApplyCollected(PickupDefinition definition)
+    {
+        // statystyki profilu: przedmioty zebrane przeze mnie
+        if (definition != null && movement != null && movement.useKeyboard)
+        {
+            PlayerProgress.Add(PlayerStat.PickupsCollected);
+        }
+
+        if (definition != null && definition.HitsOpponent)
+        {
+            // runda online: o tym, kto dostaje klątwę, decyduje telefon gracza, który ją podniósł.
+            // Kopia cudzego gracza u mnie nic nie robi (jego telefon przyśle wiadomość, kogo trafiło).
+            if (OnlineMatch.Active && movement != null && movement.networkDriven)
+            {
+                return;
+            }
+
+            PlayerPickups victim = NearestLivingOpponent();
+
+            if (OnlineMatch.Active && victim != null)
+            {
+                GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+                PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+
+                // u mnie kopia trafionego gracza dostaje klątwę tylko dla wyglądu (np. lodowy kolor),
+                // a naprawdę działa ona na jego telefonie po odebraniu wiadomości
+                victim.Apply(definition);
+                OnlineMatch.SendCurse(victim, definition.name);
+                return;
+            }
+
+            if (victim != null)
+            {
+                GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+                PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+                victim.Apply(definition);
+                return;
+            }
+        }
+
+        Apply(definition);
+    }
+
+    PlayerPickups NearestLivingOpponent()
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (match == null)
+        {
+            return null;
+        }
+
+        PlayerPickups nearest = null;
+        float best = float.MaxValue;
+        int mySlot = match.SlotOf(GetComponent<PlayerHealth>());
+
+        foreach (Combatant combatant in match.Slots)
+        {
+            // klątwy nie trafiają kolegi z drużyny
+            if (combatant == null || !combatant.IsAlive || combatant.pickups == null || combatant.pickups == this
+                || Teams.AlliedSlots(mySlot, combatant.slot))
+            {
+                continue;
+            }
+
+            float distance = (combatant.pickups.transform.position - transform.position).sqrMagnitude;
+
+            if (distance < best)
+            {
+                best = distance;
+                nearest = combatant.pickups;
+            }
+        }
+
+        return nearest;
     }
 
     public void Apply(PickupDefinition definition)
@@ -303,6 +385,9 @@ public class PlayerPickups : MonoBehaviour
             case PickupEffect.AutoBombs:
                 autoBombCount++;
                 break;
+            case PickupEffect.Freeze:
+                frozenCount++;
+                break;
         }
     }
 
@@ -318,6 +403,9 @@ public class PlayerPickups : MonoBehaviour
                 break;
             case PickupEffect.AutoBombs:
                 autoBombCount = Mathf.Max(0, autoBombCount - 1);
+                break;
+            case PickupEffect.Freeze:
+                frozenCount = Mathf.Max(0, frozenCount - 1);
                 break;
         }
     }
@@ -391,8 +479,9 @@ public class PlayerPickups : MonoBehaviour
             shieldRing.color = new Color(0.55f, 0.85f, 1f, 0.55f);
         }
 
-        // nietykalność: kolory przechodzą przez tęczę, a po jej końcu wracają do zwykłego odcienia
-        if (IsInvincible)
+        // nietykalność: kolory przechodzą przez tęczę; zamrożenie: postać jest lodowo niebieska.
+        // Po końcu efektu kolor wraca do zwykłego odcienia.
+        if (IsInvincible || Frozen)
         {
             if (!wasInvincible)
             {
@@ -400,7 +489,9 @@ public class PlayerPickups : MonoBehaviour
                 wasInvincible = true;
             }
 
-            bodyRenderer.color = Color.HSVToRGB(Mathf.Repeat(Time.time * 2f, 1f), 0.45f, 1f);
+            bodyRenderer.color = IsInvincible
+                ? Color.HSVToRGB(Mathf.Repeat(Time.time * 2f, 1f), 0.45f, 1f)
+                : new Color(0.55f, 0.82f, 1f);
         }
         else if (wasInvincible)
         {
@@ -427,11 +518,12 @@ public class PlayerPickups : MonoBehaviour
     // ---------- Wywoływane przez BombController (Spacja) ----------
 
     // Premia z buffa NextBomb dla następnej bomby.
-    public void GetNextBombBonus(out int rangeBonus, out bool overLimit)
+    public void GetNextBombBonus(out int rangeBonus, out bool overLimit, out bool piercing)
     {
         Occupant occupant = NextBombOccupant();
         rangeBonus = occupant != null ? occupant.definition.extraRange : 0;
         overLimit = occupant != null && occupant.definition.extraBombs > 0;
+        piercing = occupant != null && occupant.definition.piercing;
     }
 
     public void ConsumeNextBombBuff()
@@ -467,6 +559,9 @@ public class PlayerPickups : MonoBehaviour
             case SpecialItem.Teleport:
                 used = UseTeleport(item);
                 break;
+            case SpecialItem.Mine:
+                used = UseMine(cell);
+                break;
             case SpecialItem.Nuke:
                 // atomówka zużywa się dopiero po zrzuceniu (LaunchNuke), a Spacja tylko włącza celowanie
                 NukeTargeting.Begin(this, movement);
@@ -483,6 +578,29 @@ public class PlayerPickups : MonoBehaviour
         }
 
         return used;
+    }
+
+    // Kładzie minę na polu, na którym stoję. W rundzie online położenie miny leci do pozostałych graczy.
+    bool UseMine(Vector2Int cell)
+    {
+        MatchManager match = MatchManager.Instance;
+
+        if (bombs == null || bombs.bombPrefab == null || match == null)
+        {
+            return false;
+        }
+
+        if (!Mine.Place(cell, match.SlotOf(GetComponent<PlayerHealth>()), bombs.bombPrefab))
+        {
+            return false;
+        }
+
+        if (OnlineMatch.Active && movement != null && !movement.networkDriven)
+        {
+            OnlineMatch.SendMine(cell);
+        }
+
+        return true;
     }
 
     bool UseHammer(PickupDefinition item, Vector2Int cell, Vector2Int direction)
@@ -536,6 +654,20 @@ public class PlayerPickups : MonoBehaviour
 
         PickupFx.Spawn(item.Icon, transform.position + Vector3.up * 0.6f, 0.6f, 1.6f, Color.white, 0.5f, 5);
         PickupFx.Spawn(item.Icon, target.position + Vector3.up * 0.6f, 0.6f, 1.6f, Color.white, 0.5f, 5);
+
+        // czerwone kręgi jak po wpadnięciu kropli do wody pokazują, gdzie wylądowali oboje
+        Color red = new Color(1f, 0.18f, 0.18f, 1f);
+        PulseRing.Spawn(transform.position, red);
+        PulseRing.Spawn(target.position, red);
+
+        // kamera od razu jedzie za graczem, zamiast wolno doganiać go po skoku przez pół planszy
+        ArenaCamera arenaCamera = FindAnyObjectByType<ArenaCamera>();
+
+        if (arenaCamera != null)
+        {
+            arenaCamera.SnapToPlayer();
+        }
+
         return true;
     }
 

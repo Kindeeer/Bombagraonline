@@ -11,7 +11,22 @@ public class Combatant
     public int slot;
     public bool isBot;
 
-    public bool IsAlive => health != null && !health.IsDead;
+    // runda online: cudzy gracz (postać ruszana z sieci), jego nick i identyfikator w sesji
+    public bool remote;
+    public string onlineId;
+    public string nick;
+
+    // wyszedł z gry w trakcie rundy online
+    public bool left;
+
+    // zabójstwa w tej rundzie (wszystkie) i te, za które są monety (prawdziwi gracze)
+    public int kills;
+    public int humanKills;
+
+    // drużyna w trybie 2 na 2 (0 = niebiescy, 1 = czerwoni, -1 = gra bez drużyn)
+    public int team = Teams.None;
+
+    public bool IsAlive => !left && health != null && !health.IsDead;
 }
 
 // Zarządza rundą: dokłada boty, liczy żywych, przyznaje punkt zwycięzcy i restartuje scenę.
@@ -104,16 +119,54 @@ public class MatchManager : MonoBehaviour
         Array.Clear(scores, 0, scores.Length);
         InputLocked = false;
         ChaosActive = false;
+        MatchOver = false;
     }
+
+    // Zeruje wygrane rundy (nowy mecz albo wyjście do menu).
+    public static void ResetScores()
+    {
+        Array.Clear(scores, 0, scores.Length);
+    }
+
+    // true, gdy właśnie skończona runda zakończyła cały mecz (ktoś dobił do liczby wygranych ustawionej przez hosta).
+    public static bool MatchOver { get; private set; }
 
     public static int GetScore(int slot)
     {
         return slot >= 0 && slot < MaxSlots ? scores[slot] : 0;
     }
 
+    // Numer slotu postaci (-1, gdy nie bierze udziału w rundzie).
+    public int SlotOf(PlayerHealth health)
+    {
+        if (health != null)
+        {
+            foreach (Combatant combatant in Slots)
+            {
+                if (combatant != null && combatant.health == health)
+                {
+                    return combatant.slot;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    // Czy ten uczestnik wygrał rundę: sam zwycięzca albo (w drużynach) każdy z jego drużyny, także ten, kto zginął.
+    public static bool IsWinner(Combatant combatant, Combatant winner)
+    {
+        return winner != null && combatant != null && (combatant == winner || Teams.Allies(combatant, winner));
+    }
+
     public static string NameOf(Combatant combatant)
     {
-        return combatant.isBot ? "BOT " + combatant.slot : "YOU";
+        if (combatant.remote && !string.IsNullOrEmpty(combatant.nick))
+        {
+            return combatant.nick;
+        }
+
+        return combatant.isBot ? Loc.F("hud.bot", combatant.slot) : (GameRules.Custom || LobbyState.InLobby ? PlayerProfile.Nick : Loc.T("hud.you"));
     }
 
     // Grafiki gracza ze slotu z obiektu GameArt (null, gdy w scenie nie ma GameArt).
@@ -180,11 +233,62 @@ public class MatchManager : MonoBehaviour
         }
 
         ChaosActive = false;
+        MatchOver = false;
         roundClock = 0f;
         Register(human, 0, false);
 
+        bool online = OnlineMatch.Active;
+
+        // licznik monet u góry ekranu
+        if (GetComponent<CoinHud>() == null)
+        {
+            gameObject.AddComponent<CoinHud>();
+        }
+
+
+        if (online)
+        {
+            StartOnline(human);
+        }
+
+        // runda z poczekalni: czas do CHAOS z ustawień hosta (największa wartość = CHAOS wyłączony)
+        if (GameRules.Custom)
+        {
+            chaosEnabled = GameRules.Current.chaosSeconds < LobbySettings.ChaosOff;
+            chaosAfterSeconds = GameRules.Current.chaosSeconds;
+        }
+
+        // dymki emotek nad głowami graczy
+        if (GetComponent<EmoteBubbles>() == null)
+        {
+            gameObject.AddComponent<EmoteBubbles>();
+        }
+
+        // strzałki z buźkami graczy, którzy są poza kadrem
+        if (FindAnyObjectByType<OffscreenIndicators>() == null)
+        {
+            gameObject.AddComponent<OffscreenIndicators>();
+        }
+
         // menu główne: boty pojawiają się dopiero po wyborze trybu (liczbę wybiera gracz), a skiny po wyborze skina
-        bool menu = showMainMenu && MainMenu.ShouldShow;
+        bool menu = showMainMenu && MainMenu.ShouldShow && !online;
+
+        // powrót do poczekalni po skończonym meczu: bez menu i botów, od razu pokój z graczami
+        if (LobbyState.InLobby && !online && !menu)
+        {
+            InputLocked = false;
+            ApplyLooks();
+            LobbyController.Begin(human);
+
+            ArenaCamera lobbyCamera = FindAnyObjectByType<ArenaCamera>();
+
+            if (lobbyCamera != null)
+            {
+                lobbyCamera.SetMode(ArenaCamera.ViewMode.Medium, true);
+            }
+
+            return;
+        }
 
         if (menu)
         {
@@ -192,7 +296,7 @@ public class MatchManager : MonoBehaviour
         }
         else
         {
-            SpawnBots(human, MainMenu.GameStarted ? MainMenu.BotCount : botCount);
+            SpawnBots(human, online ? 0 : (MainMenu.GameStarted ? MainMenu.BotCount : botCount));
             ApplyLooks();
         }
 
@@ -202,8 +306,183 @@ public class MatchManager : MonoBehaviour
         }
     }
 
+    // Runda online: ja stoję w swoim rogu, a każdy pozostały gracz dostaje kopię postaci ruszaną pozycją z sieci.
+    void StartOnline(PlayerHealth human)
+    {
+        OnlineMatch.BombPrefab = human.GetComponent<BombController>().bombPrefab;
+        GridMap map = GridMap.Instance;
+
+        foreach (OnlineSlot info in OnlineMatch.Players)
+        {
+            Vector2Int spawn = map.spawnPositions[info.spawn % map.spawnPositions.Length];
+
+            if (info.isMe)
+            {
+                Slots[0].onlineId = info.id;
+                Slots[0].nick = info.nick;
+                human.GetComponent<PlayerMovement>().WarpTo(spawn);
+                continue;
+            }
+
+            if (info.slot <= 0 || info.slot >= MaxSlots)
+            {
+                continue;
+            }
+
+            GameObject copy = Instantiate(human.gameObject, human.transform.parent);
+            copy.name = "Player " + info.nick;
+
+            PlayerMovement movement = copy.GetComponent<PlayerMovement>();
+            movement.useKeyboard = false;
+            movement.networkDriven = true;
+            movement.remoteId = info.id;
+            movement.WarpTo(spawn);
+
+            // cudzą postać kontroluje jej właściciel: bomby stawia przez sieć, a śmierć ogłasza sam
+            copy.GetComponent<BombController>().enabled = false;
+            copy.GetComponent<PlayerHealth>().remoteControlled = true;
+
+            Register(copy.GetComponent<PlayerHealth>(), info.slot, false);
+            Slots[info.slot].remote = true;
+            Slots[info.slot].onlineId = info.id;
+            Slots[info.slot].nick = info.nick;
+        }
+
+        if (GetComponent<OnlineLink>() == null)
+        {
+            gameObject.AddComponent<OnlineLink>();
+        }
+    }
+
+    // Cudzy gracz zginął (przyszła wiadomość albo wyszedł z gry).
+    public void OnlineDead(string playerId)
+    {
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant != null && combatant.remote && combatant.onlineId == playerId && combatant.health != null && !combatant.health.IsDead)
+            {
+                combatant.health.Kill();
+            }
+        }
+    }
+
+    // Postać zginęła: zabójstwo dostaje ten, czyja bomba podpaliła pole chwilę wcześniej (nie liczy się własna bomba).
+    // Moneta za zabicie należy się tylko za prawdziwego gracza, nie za bota.
+    public void NotifyDeath(PlayerHealth victimHealth)
+    {
+        Combatant victim = null;
+
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant != null && combatant.health == victimHealth)
+            {
+                victim = combatant;
+            }
+        }
+
+        // statystyki profilu: moja śmierć
+        if (victim != null && victim.slot == 0 && !victim.remote)
+        {
+            PlayerProgress.Add(PlayerStat.Deaths);
+        }
+
+        int killerSlot = victimHealth.LastHitSlot;
+
+        if (victim == null || killerSlot < 0 || killerSlot >= MaxSlots || killerSlot == victim.slot || Time.time - victimHealth.LastHitAt > 1.5f)
+        {
+            return;
+        }
+
+        Combatant killer = Slots[killerSlot];
+
+        // zabicie kolegi z drużyny (przy włączonym "ogniu w swoich") nie liczy się do zabójstw ani monet
+        if (killer == null || Teams.Allies(killer, victim))
+        {
+            return;
+        }
+
+        killer.kills++;
+
+        // statystyki profilu: moje zabójstwa (gracze i boty liczone osobno)
+        if (killer.slot == 0)
+        {
+            PlayerProgress.Add(victim.isBot ? PlayerStat.BotKills : PlayerStat.PlayerKills);
+        }
+
+        if (!victim.isBot)
+        {
+            killer.humanKills++;
+
+            // monety dostaję tylko za moje własne zabójstwa
+            if (killer.slot == 0)
+            {
+                PlayerWallet.AddCoins(PlayerWallet.PlayerKillReward);
+                GameAudio.Play(AudioEvent.CoinGain);
+            }
+        }
+    }
+
+    // Gracz wyszedł z gry (Quit albo zerwane połączenie): jego postać znika z areny, a runda liczy go jako martwego.
+    public void OnlineLeft(string playerId)
+    {
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant != null && combatant.remote && combatant.onlineId == playerId && !combatant.left)
+            {
+                combatant.left = true;
+
+                if (combatant.health != null)
+                {
+                    combatant.health.gameObject.SetActive(false);
+                }
+
+                NoticeLeft(combatant.nick);
+            }
+        }
+    }
+
+    void NoticeLeft(string nick)
+    {
+        Debug.Log("Gracz wyszedł z gry: " + nick);
+    }
+
+    // Host ogłosił koniec rundy. Pusty identyfikator = remis.
+    public void OnlineEnd(string winnerId)
+    {
+        if (RoundOver)
+        {
+            return;
+        }
+
+        Combatant winner = null;
+
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant != null && !string.IsNullOrEmpty(winnerId) && combatant.onlineId == winnerId)
+            {
+                winner = combatant;
+            }
+        }
+
+        EndRoundCore(winner, true);
+    }
+
     void SpawnBots(PlayerHealth human, int count)
     {
+        // każda runda losuje boty od nowa: inne zwierzaki, żadnych dwóch takich samych
+        GameArt art = GameArt.Instance;
+
+        if (art != null)
+        {
+            art.ShuffleBotSkins();
+        }
+
+        // tryb drużynowy bez internetu: boty zawsze dopełniają skład do czterech (ja i bot kontra dwa boty)
+        if (Teams.Active && !OnlineMatch.Active)
+        {
+            count = MaxSlots - 1;
+        }
+
         for (int slot = 1; slot <= count && slot < MaxSlots; slot++)
         {
             SpawnBot(human, slot);
@@ -213,6 +492,17 @@ public class MatchManager : MonoBehaviour
     // Wpisuje w każdą postać jej skin (GameArt) i odcień slotu bota. Wołane przy starcie i po wyborze w menu.
     void ApplyLooks()
     {
+        AssignTeams();
+
+        // startowe statystyki, rozmiar i prędkość z ustawień poczekalni (puste w zwykłej grze)
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant != null && combatant.health != null)
+            {
+                GameRules.ApplyToPlayer(combatant.health.gameObject, combatant.isBot ? botSpeedMultiplier : 1f);
+            }
+        }
+
         foreach (Combatant combatant in Slots)
         {
             if (combatant == null || combatant.health == null)
@@ -246,6 +536,58 @@ public class MatchManager : MonoBehaviour
         }
     }
 
+    // Tryb drużynowy: wpisuje każdemu drużynę, kolor drużyny (karta w HUD, strzałki, wyniki) i pierścień pod stopami.
+    // Bez internetu ja i pierwszy bot gramy razem przeciwko dwóm pozostałym botom (startujemy po lewej stronie areny),
+    // a online drużyny rozdaje host i przysyła je razem ze startem rundy.
+    void AssignTeams()
+    {
+        if (!Teams.Active || LobbyState.InLobby)
+        {
+            return;
+        }
+
+        int myTeam = LobbyState.MyTeam == 2 ? Teams.Red : Teams.Blue;
+
+        foreach (Combatant combatant in Slots)
+        {
+            if (combatant == null || combatant.health == null)
+            {
+                continue;
+            }
+
+            if (OnlineMatch.Active)
+            {
+                OnlineSlot info = OnlineMatch.SlotInfo(combatant.slot);
+                combatant.team = info != null ? info.team : Teams.None;
+            }
+            else
+            {
+                combatant.team = combatant.slot < 2 ? myTeam : 1 - myTeam;
+            }
+
+            if (combatant.team < 0)
+            {
+                continue;
+            }
+
+            Color color = Teams.ColorOf(combatant.team);
+
+            if (combatant.slot < slotColors.Length)
+            {
+                slotColors[combatant.slot] = color;
+            }
+
+            TeamRing.Attach(combatant.health.gameObject, color);
+        }
+
+        GameHud hud = FindAnyObjectByType<GameHud>();
+
+        if (hud != null)
+        {
+            hud.ForceRefresh();
+        }
+    }
+
     // Najpierw (jeśli jest menu główne) czeka na Play, potem READY na widoku całej areny, potem GO!:
     // kamera się przybliża, a gracze i boty mogą ruszyć.
     IEnumerator IntroRoutine(PlayerHealth human, bool waitForMenu)
@@ -264,6 +606,21 @@ public class MatchManager : MonoBehaviour
             while (MainMenu.IsOpen)
             {
                 yield return null;
+            }
+
+            // multiplayer: najpierw poczekalnia, a rundę zaczyna host przyciskiem START
+            if (LobbyState.InLobby)
+            {
+                InputLocked = false;
+                ApplyLooks();
+                LobbyController.Begin(human);
+
+                if (arenaCamera != null)
+                {
+                    arenaCamera.SetMode(ArenaCamera.ViewMode.Medium, true);
+                }
+
+                yield break;
             }
 
             SpawnBots(human, MainMenu.BotCount);
@@ -287,7 +644,7 @@ public class MatchManager : MonoBehaviour
         // jedna klatka na ustawienie kamery i postaci
         yield return null;
         GameAudio.Play(AudioEvent.RoundReady);
-        yield return intro.Show("READY", readyColor, readySeconds);
+        yield return intro.Show(Loc.T("round.ready"), readyColor, readySeconds);
 
         InputLocked = false;
 
@@ -297,7 +654,7 @@ public class MatchManager : MonoBehaviour
         }
 
         GameAudio.Play(AudioEvent.RoundGo);
-        yield return intro.Show("GO!", goColor, goSeconds);
+        yield return intro.Show(Loc.T("round.go"), goColor, goSeconds);
         Destroy(intro.gameObject);
     }
 
@@ -309,6 +666,13 @@ public class MatchManager : MonoBehaviour
         combatant.slot = slot;
         combatant.isBot = isBot;
         Slots[slot] = combatant;
+
+        BombController bombs = health.GetComponent<BombController>();
+
+        if (bombs != null)
+        {
+            bombs.ownerSlot = slot;
+        }
     }
 
     // Bot to kopia gracza (te same komponenty i statystyki), który zamiast klawiatury słucha BotBrain.
@@ -351,6 +715,12 @@ public class MatchManager : MonoBehaviour
             }
         }
 
+        // runda online: koniec rundy ogłasza host, reszta czeka na jego wiadomość
+        if (OnlineMatch.Active && !OnlineMatch.IsHost)
+        {
+            return;
+        }
+
         // tuż po wybuchu atomówki czekamy, aż wszystkie ofiary zginą
         if (Time.time < nukeGraceUntil)
         {
@@ -360,6 +730,9 @@ public class MatchManager : MonoBehaviour
         int total = 0;
         int alive = 0;
         Combatant last = null;
+        bool blueAlive = false;
+        bool redAlive = false;
+        bool anyTeam = false;
 
         foreach (Combatant combatant in Slots)
         {
@@ -369,11 +742,14 @@ public class MatchManager : MonoBehaviour
             }
 
             total++;
+            anyTeam |= combatant.team >= 0;
 
             if (combatant.IsAlive)
             {
                 alive++;
                 last = combatant;
+                blueAlive |= combatant.team == Teams.Blue;
+                redAlive |= combatant.team == Teams.Red;
             }
         }
 
@@ -388,7 +764,10 @@ public class MatchManager : MonoBehaviour
             return;
         }
 
-        if (alive <= 1)
+        // tryb drużynowy: runda trwa, dopóki żyje ktoś z obu drużyn (wygrywa cała drużyna ostatniego żywego)
+        int sidesAlive = Teams.Active && anyTeam ? (blueAlive ? 1 : 0) + (redAlive ? 1 : 0) : alive;
+
+        if (sidesAlive <= 1)
         {
             Combatant winner = last;
 
@@ -412,26 +791,103 @@ public class MatchManager : MonoBehaviour
     IEnumerator ChaosBanner()
     {
         RoundIntro banner = RoundIntro.Create();
-        yield return banner.Show("DOUBLE BUFFS,\nCHAOS!", chaosColor, 2.6f, 150f);
+        yield return banner.Show(Loc.T("round.chaos"), chaosColor, 2.6f, 150f);
         Destroy(banner.gameObject);
     }
 
     void EndRound(Combatant winner, bool scorePoint)
     {
-        RoundOver = true;
-
-        if (winner != null && scorePoint)
+        // runda online: host mówi pozostałym, kto wygrał (pusty identyfikator = remis)
+        if (OnlineMatch.Active && OnlineMatch.IsHost && scorePoint)
         {
-            scores[winner.slot]++;
+            OnlineMatch.SendEnd(winner != null ? winner.onlineId : "");
         }
 
+        EndRoundCore(winner, scorePoint);
+    }
+
+    void EndRoundCore(Combatant winner, bool scorePoint)
+    {
+        RoundOver = true;
+
+        // punkt za rundę: zwycięzca, a w drużynach każdy z wygranej drużyny
+        if (winner != null && scorePoint)
+        {
+            foreach (Combatant combatant in Slots)
+            {
+                if (IsWinner(combatant, winner))
+                {
+                    scores[combatant.slot]++;
+                }
+            }
+        }
+
+        bool teamWin = winner != null && Teams.Active && winner.team >= 0;
+
+        // mecz z poczekalni kończy się, gdy zwycięzca rundy dobił do liczby wygranych ustawionej przez hosta
+        int winsToEnd = GameRules.Custom ? GameRules.Current.winsToEnd : LobbySettings.WinsEndless;
+        MatchOver = scorePoint && winner != null && winsToEnd < LobbySettings.WinsEndless && scores[winner.slot] >= Mathf.Max(1, winsToEnd);
+
         GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
-        banner = winner == null ? (scorePoint ? "DRAW" : "") : NameOf(winner) + " WINS THE ROUND";
-        Invoke(nameof(Restart), restartDelay);
+        banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "")
+            : teamWin ? Teams.NameOf(winner.team) + (MatchOver ? Loc.P(" WYGRYWAJĄ MECZ!", " WINS THE MATCH!") : Loc.P(" WYGRYWAJĄ RUNDĘ", " WINS THE ROUND"))
+            : MatchOver ? NameOf(winner) + Loc.P(" WYGRYWA MECZ!", " WINS THE MATCH!")
+            : Loc.F("round.wins", NameOf(winner));
+
+        // moneta za rozegraną rundę (każdy gracz u siebie dostaje +1, także po przegranej)
+        if (scorePoint)
+        {
+            PlayerWallet.AddCoins(PlayerWallet.RoundReward);
+        }
+
+        // profil: statystyki rundy, doświadczenie i ewentualny awans na wyższy poziom
+        if (scorePoint && Slots[0] != null)
+        {
+            GameArt art = GameArt.Instance;
+            string skin = art != null && art.SkinCount > 0 ? art.players[Mathf.Clamp(SkinSelection.Index, 0, art.SkinCount - 1)].label : "";
+            Combatant me = Slots[0];
+
+            PlayerProgress.RoundFinished(IsWinner(me, winner), me.humanKills, me.kills - me.humanKills, OnlineMatch.Active, skin);
+        }
+
+        // monety za wygraną rundę (tylko dla mnie: bot ani cudzy gracz nie dają monet; w drużynach liczy się wygrana drużyny)
+        if (scorePoint && IsWinner(Slots[0], winner))
+        {
+            PlayerWallet.AddCoins(PlayerWallet.CurrentWinReward);
+            GameAudio.Play(AudioEvent.CoinGain);
+        }
+
+        // okienko z wynikami (zabicia, wygrane, monety) zostaje na ekranie dłużej niż sam napis
+        float delay = restartDelay;
+
+        if (scorePoint)
+        {
+            RoundResults.Show(this, winner);
+            delay = Mathf.Max(restartDelay, MatchOver ? 8f : 6f);
+        }
+
+        // runda online: następną planszę zaczyna host (klienci dostają od niego wiadomość o starcie)
+        if (!OnlineMatch.Active || OnlineMatch.IsHost)
+        {
+            Invoke(nameof(Restart), delay);
+        }
     }
 
     void Restart()
     {
+        // koniec meczu: wszyscy wracają do poczekalni (online host mówi to pozostałym graczom)
+        if (MatchOver)
+        {
+            OnlineMatch.HostBackToLobby();
+            return;
+        }
+
+        if (OnlineMatch.Active)
+        {
+            OnlineMatch.HostNextRound();
+            return;
+        }
+
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 

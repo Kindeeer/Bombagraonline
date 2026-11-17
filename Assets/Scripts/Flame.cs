@@ -9,11 +9,12 @@ public class Flame : MonoBehaviour
     const int SortingBoost = 1;
 
     Vector2Int cell;
+    int owner = -1;
     float timeLeft;
     bool active;
     bool sortingApplied;
 
-    public void Init(Vector2Int flameCell)
+    public void Init(Vector2Int flameCell, int ownerSlot = -1)
     {
         if (!sortingApplied)
         {
@@ -37,11 +38,12 @@ public class Flame : MonoBehaviour
         }
 
         cell = flameCell;
+        owner = ownerSlot;
         timeLeft = duration;
         active = true;
 
         transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * sortOffsetY;
-        GridMap.Instance.AddFire(cell);
+        GridMap.Instance.AddFire(cell, ownerSlot);
     }
 
     void Update()
@@ -71,7 +73,7 @@ public class Flame : MonoBehaviour
 
         if (GridMap.Instance != null)
         {
-            GridMap.Instance.RemoveFire(cell);
+            GridMap.Instance.RemoveFire(cell, owner);
         }
     }
 }

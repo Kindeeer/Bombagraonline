@@ -106,9 +106,13 @@ public class Rocket : MonoBehaviour
             return false;
         }
 
+        // w drużynach rakieta przelatuje nad kolegą strzelającego (chyba że włączony jest "ogień w swoich")
+        int shooterSlot = shooter != null ? match.SlotOf(shooter.GetComponent<PlayerHealth>()) : -1;
+
         foreach (Combatant other in match.Slots)
         {
-            if (other == null || !other.IsAlive || other.health.transform == shooter)
+            if (other == null || !other.IsAlive || other.health.transform == shooter
+                || (!GameRules.FriendlyFire && Teams.AlliedSlots(shooterSlot, other.slot)))
             {
                 continue;
             }

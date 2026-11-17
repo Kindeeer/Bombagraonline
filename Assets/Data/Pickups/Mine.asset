@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 584aac5c9759415d93a08b29616ed3d6, type: 3}
+  m_Name: Mine
+  m_EditorClassIdentifier: Assembly-CSharp::PickupDefinition
+  displayName: Mine
+  description: 'Space: drops a hidden mine under you. It blows up when an opponent steps on it. Two uses.'
+  icon: {fileID: 0}
+  placeholderIcon: 20
+  bubbleTint: {r: 1, g: 1, b: 1, a: 1}
+  mode: 1
+  extraBombs: 0
+  extraRange: 0
+  speedSteps: 0
+  fuseChange: 0
+  piercing: 0
+  effect: 0
+  durationSeconds: 8
+  curseOpponent: 0
+  special: 5
+  rocketBlastRange: 0
+  uses: 2
+  weightFromBlocks: 8
+  weightFromFountain: 15

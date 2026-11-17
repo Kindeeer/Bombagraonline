@@ -18,12 +18,18 @@ public class PickupTable : ScriptableObject
 
     public PickupDefinition PickFromBlocks()
     {
-        return Pick(item => item.weightFromBlocks);
+        return Pick(item => GameRules.WeightFromBlocks(item));
     }
 
     public PickupDefinition PickFromFountain()
     {
-        return Pick(item => item.weightFromFountain);
+        return Pick(item => GameRules.WeightFromFountain(item));
+    }
+
+    // W rundzie online część przedmiotów nie wypada (patrz OnlineMatch.AllowsPickup).
+    static bool Allowed(PickupDefinition item)
+    {
+        return !OnlineMatch.Active || OnlineMatch.AllowsPickup(item);
     }
 
     PickupDefinition Pick(Func<PickupDefinition, int> weightOf)
@@ -32,7 +38,7 @@ public class PickupTable : ScriptableObject
 
         foreach (PickupDefinition item in items)
         {
-            if (item != null)
+            if (item != null && Allowed(item))
             {
                 total += Mathf.Max(0, weightOf(item));
             }
@@ -47,7 +53,7 @@ public class PickupTable : ScriptableObject
 
         foreach (PickupDefinition item in items)
         {
-            if (item == null)
+            if (item == null || !Allowed(item))
             {
                 continue;
             }

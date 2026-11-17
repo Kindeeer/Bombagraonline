@@ -82,6 +82,7 @@ public class GameHud : MonoBehaviour
 
     // ostatnio pokazany stan slotów (0 pusty, 1 żyje, 2 martwy) i wynik, żeby nie budować napisów co klatkę
     int shownSkinVersion;
+    int shownLocVersion;
     int[] shownState;
     int[] shownScore;
     int shownLeader = -2;
@@ -110,6 +111,24 @@ public class GameHud : MonoBehaviour
     void OnEmoteSent(int slot, Emote emote)
     {
         ShowEmote(slot, Emotes.SpriteFor(emote));
+    }
+
+    // Napisy HUD zrobione w Hierarchii (BUFF, CAM, EMOTKI, nazwy emotek) dostają tłumaczenie. Napisy ustawiane z kodu zostają.
+    void BindLocalizedTexts()
+    {
+        List<TMP_Text> fromCode = new List<TMP_Text> { buffName, buffCount, actionBadge };
+
+        foreach (PlayerSlot slot in playerSlots)
+        {
+            if (slot != null)
+            {
+                fromCode.Add(slot.label);
+                fromCode.Add(slot.emoteText);
+            }
+        }
+
+        fromCode.RemoveAll(t => t == null);
+        Loc.BindTexts(transform, fromCode.ToArray());
     }
 
     // Wpisuje w HUD grafiki z GameArt: buźki, koronę, ikonę bomby, tło paneli, klawisze i joystick.
@@ -161,6 +180,7 @@ public class GameHud : MonoBehaviour
         }
 
         ApplyArt();
+        BindLocalizedTexts();
         CreatePassiveSlots();
         CreateGearButton();
         CreateSecondBuffSlot();
@@ -206,6 +226,16 @@ public class GameHud : MonoBehaviour
             Array.Fill(shownState, -1);
         }
 
+        // po zmianie języka napisy na kartach i nazwa przedmiotu też
+        if (Loc.Version != shownLocVersion)
+        {
+            shownLocVersion = Loc.Version;
+            Array.Fill(shownState, -1);
+            shownBuff = null;
+            shownCount = -1;
+        }
+
+        UpdateMapFrame();
         UpdatePlayers(match);
         UpdateCrown(match);
         UpdateBuff();
@@ -241,8 +271,30 @@ public class GameHud : MonoBehaviour
             target.emoteText.text = text ?? "";
         }
 
+        HideEmoteBackground(target);
         target.emoteBubble.SetActive(true);
         emoteUntil[slot] = Time.unscaledTime + seconds;
+    }
+
+    // Dymek emotki na karcie gracza nie ma tła: zostaje sama emotka (i ewentualny napis). Tło i jego cień lub obwódka
+    // z Hierarchii są wyłączane z kodu, więc nie trzeba nic zmieniać w scenie.
+    static void HideEmoteBackground(PlayerSlot slot)
+    {
+        foreach (Image image in slot.emoteBubble.GetComponentsInChildren<Image>(true))
+        {
+            if (image != slot.emoteIcon)
+            {
+                image.enabled = false;
+            }
+        }
+
+        foreach (Shadow shadow in slot.emoteBubble.GetComponentsInChildren<Shadow>(true))
+        {
+            if (slot.emoteIcon == null || shadow.gameObject != slot.emoteIcon.gameObject)
+            {
+                shadow.enabled = false;
+            }
+        }
     }
 
     [ContextMenu("Test emotki (gracz 1)")]
@@ -262,9 +314,22 @@ public class GameHud : MonoBehaviour
         {
             PlayerSlot slot = playerSlots[i];
 
-            if (slot != null && slot.emoteBubble != null && slot.emoteBubble.activeSelf && Time.unscaledTime >= emoteUntil[i])
+            if (slot == null || slot.emoteBubble == null || !slot.emoteBubble.activeSelf)
+            {
+                continue;
+            }
+
+            bool finished = Time.unscaledTime >= emoteUntil[i];
+
+            if (finished)
             {
                 slot.emoteBubble.SetActive(false);
+            }
+
+            // emotka stoi w miejscu nazwy gracza, więc na czas emotki nazwa znika (inaczej nachodziłyby na siebie)
+            if (slot.label != null)
+            {
+                slot.label.alpha = finished ? 1f : 0f;
             }
         }
     }
@@ -397,8 +462,65 @@ public class GameHud : MonoBehaviour
         }
     }
 
+    string lobbySignature = "";
+
+    // W poczekalni lewe karty pokazują graczy z pokoju (nick i skin). Pozostałe karty są ukryte.
+    void UpdateLobbyPlayers()
+    {
+        System.Collections.Generic.List<OnlinePlayer> players = OnlineSession.Connected
+            ? OnlineSession.Players()
+            : new System.Collections.Generic.List<OnlinePlayer> { OnlinePlayer.Local() };
+
+        // karty rysujemy od nowa tylko, gdy coś się zmieniło
+        System.Text.StringBuilder signature = new System.Text.StringBuilder();
+
+        foreach (OnlinePlayer player in players)
+        {
+            signature.Append(player.id).Append('|').Append(player.nick).Append('|').Append(player.skin).Append('|').Append(player.chroma).Append(';');
+        }
+
+        signature.Append(SkinSelection.Version).Append(Loc.Version);
+
+        if (signature.ToString() == lobbySignature)
+        {
+            return;
+        }
+
+        lobbySignature = signature.ToString();
+
+        for (int i = 0; i < playerSlots.Length; i++)
+        {
+            PlayerSlot slot = playerSlots[i];
+
+            if (slot == null || slot.face == null)
+            {
+                continue;
+            }
+
+            bool taken = i < players.Count;
+            SetSlotVisible(slot, taken);
+
+            if (taken)
+            {
+                Sprite portrait = players[i].Portrait();
+                SetSlot(slot, portrait != null ? portrait : faceAlive, portrait != null ? Color.white : playerColors[i % playerColors.Length],
+                    cardColor, players[i].nick, textColor);
+            }
+        }
+
+        Array.Fill(shownState, -1);
+    }
+
     void UpdatePlayers(MatchManager match)
     {
+        if (LobbyState.InLobby)
+        {
+            UpdateLobbyPlayers();
+            return;
+        }
+
+        lobbySignature = "";
+
         for (int i = 0; i < playerSlots.Length; i++)
         {
             PlayerSlot slot = playerSlots[i];
@@ -433,25 +555,50 @@ public class GameHud : MonoBehaviour
             Color aliveColor = portrait != null ? Color.white : color;
             Color deadFaceColor = portraitDead != null || portrait != null ? Color.white : color;
 
+            // karta pojawia się dopiero, gdy ktoś gra danym slotem (pusty slot nic nie pokazuje)
+            SetSlotVisible(slot, state != 0);
+
+            // tryb drużynowy: karta ma odcień drużyny gracza
+            Color card = combatant != null && Teams.Active && combatant.team >= 0
+                ? Color.Lerp(cardColor, Teams.ColorOf(combatant.team), 0.5f)
+                : cardColor;
+
             if (state == 0)
             {
-                // pusty slot: nikt nie gra tym kolorem
                 aliveColor.a = emptySlotAlpha;
                 SetSlot(slot, alive, aliveColor, new Color(cardColor.r, cardColor.g, cardColor.b, 0.5f), "", textColor);
             }
             else if (state == 2)
             {
-                SetSlot(slot, dead, deadFaceColor, cardColor, "DEAD  " + score, deadColor);
+                SetSlot(slot, dead, deadFaceColor, card, Loc.T("hud.dead") + "  " + score, deadColor);
             }
             else
             {
-                SetSlot(slot, alive, aliveColor, cardColor, MatchManager.NameOf(combatant) + "  " + score, textColor);
+                SetSlot(slot, alive, aliveColor, card, MatchManager.NameOf(combatant) + "  " + score, textColor);
             }
+        }
+    }
+
+    static void SetSlotVisible(PlayerSlot slot, bool visible)
+    {
+        if (slot.background != null) slot.background.gameObject.SetActive(visible);
+        if (slot.face != null) slot.face.gameObject.SetActive(visible);
+        if (slot.label != null) slot.label.gameObject.SetActive(visible);
+    }
+
+    // Wymusza odświeżenie kart graczy (np. po zmianie nicku).
+    public void ForceRefresh()
+    {
+        if (shownState != null)
+        {
+            Array.Fill(shownState, -1);
         }
     }
 
     static void SetSlot(PlayerSlot slot, Sprite face, Color faceColor, Color background, string label, Color labelColor)
     {
+        // buźki zwierzaków nie są kwadratowe, więc nie rozciągamy ich do rozmiaru karty
+        slot.face.preserveAspect = true;
         slot.face.sprite = face;
         slot.face.color = faceColor;
 
@@ -500,7 +647,7 @@ public class GameHud : MonoBehaviour
         }
 
         if (buffEmpty != null) buffEmpty.SetActive(shown == null);
-        if (buffName != null) buffName.text = shown != null ? shown.displayName : "";
+        if (buffName != null) buffName.text = shown != null ? Loc.Pickup(shown) : "";
         if (buffCount != null) buffCount.text = count < 0 ? -count + "s" : count > 1 ? "x" + count : "";
     }
 
@@ -736,6 +883,7 @@ public class GameHud : MonoBehaviour
 
     const string BackdropName = "Backdrop";
     const string MapFrameName = "MapFrame";
+    const float FrameOverlap = 12f;
 
     Image leftBackdrop;
     Image rightBackdrop;
@@ -820,9 +968,10 @@ public class GameHud : MonoBehaviour
             {
                 mapFrameImage.sprite = art.hudMapFrameSprite;
             }
-            else if (mapFrameImage.sprite == null)
+            else
             {
-                mapFrameImage.sprite = UiKit.RoundedSprite();
+                // ramka wokół areny ma ostre rogi, żeby w narożnikach nic nie prześwitywało
+                mapFrameImage.sprite = UiKit.SquareSprite();
             }
 
             mapFrameImage.type = Image.Type.Sliced;
@@ -843,9 +992,13 @@ public class GameHud : MonoBehaviour
 
         RectTransform rect = mapFrameImage.rectTransform;
         rect.anchorMin = new Vector2(leftPanel.anchorMax.x, 0f);
-        rect.anchorMax = new Vector2(rightPanel.anchorMin.x, 1f);
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
+        // w poczekalni prawy panel HUD jest wyłączony, a ramka kończy się tam, gdzie zaczyna się panel zasad
+        float right = LobbyState.InLobby ? Mathf.Min(rightPanel.anchorMin.x, LobbyController.PanelStartFraction) : rightPanel.anchorMin.x;
+        rect.anchorMax = new Vector2(right, 1f);
+
+        // ramka zachodzi odrobinę pod panele boczne (rysują się na niej), żeby między nią a panelami nie było szparki
+        rect.offsetMin = new Vector2(-FrameOverlap, 0f);
+        rect.offsetMax = new Vector2(FrameOverlap, 0f);
     }
 
     // ---------- Zębatka (pauza) ----------

@@ -18,7 +18,7 @@ using UnityEngine.InputSystem;
 // Obiekty szukane są po nazwach (Page_*, Button_*, Row_*), więc ich nazw nie zmieniaj, a resztę (pozycje, kolory,
 // sprite'y, napisy) możesz edytować dowolnie.
 // Grafiki z GameArt (sekcja "Menu główne": tło, logo, przyciski, karty) nadpisują sprite'y z Canvasu, gdy są wpisane.
-public class MainMenu : MonoBehaviour
+public partial class MainMenu : MonoBehaviour
 {
     public static bool IsOpen { get; private set; }
 
@@ -52,7 +52,7 @@ public class MainMenu : MonoBehaviour
     }
 
     // Czy tryb wieloosobowy jest dostępny (na razie nie: multiplayer robimy na końcu).
-    public static bool MultiplayerAvailable => false;
+    public static bool MultiplayerAvailable => true;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
@@ -84,6 +84,8 @@ public class MainMenu : MonoBehaviour
 
     public static void Open()
     {
+        // logowanie do usług online zaczyna się w tle od razu, żeby HOST i JOIN nie czekały na nie po kliknięciu
+        OnlineSession.Warmup();
         Ensure().Show();
     }
 
@@ -99,6 +101,12 @@ public class MainMenu : MonoBehaviour
     // Wraca do menu głównego (np. z menu debug): wczytuje scenę od nowa i pokazuje menu.
     public static void ReturnToMenu()
     {
+        GameRules.Reset();
+        MatchManager.ResetScores();
+        LobbyState.End();
+        OnlineMatch.SendLeave();
+        OnlineMatch.End();
+        OnlineSession.LeaveAsync();
         GameStarted = false;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
@@ -110,6 +118,13 @@ public class MainMenu : MonoBehaviour
         Bots,
         Settings,
         Skins,
+        Shop,
+        Edit,
+        Multi,
+        Join,
+        Profile,
+        Icons,
+        Missions,
         Pause,
         PauseSettings
     }
@@ -142,6 +157,8 @@ public class MainMenu : MonoBehaviour
 
     void OnDestroy()
     {
+        Loc.Changed -= OnLanguageChanged;
+
         if (instance == this)
         {
             instance = null;
@@ -182,6 +199,10 @@ public class MainMenu : MonoBehaviour
             }
         }
 
+        BuildShop();
+        BuildMultiplayerPages();
+        BuildProfilePage();
+
         Transform grid = FindDeep(transform, "Grid");
         skinGrid = grid != null ? (RectTransform)grid : null;
 
@@ -191,6 +212,10 @@ public class MainMenu : MonoBehaviour
         EnsureButtonFx();
         ApplyArt();
         Bind();
+
+        // język: flagi w rogu i tłumaczenie napisów ze sceny (napisy ustawiane z kodu są pominięte)
+        BuildLanguagePickers();
+        Loc.BindTexts(transform, editTitle, chestTitleText);
     }
 
     // Menu zbudowane w Hierarchii mogło mieć uszkodzony efekt przycisków (po przeniesieniu klasy ButtonFx do osobnego pliku).
@@ -318,6 +343,18 @@ public class MainMenu : MonoBehaviour
     {
         Wire("Button_Play", () => ShowPage(Page.Mode));
         Wire("Button_Skins", () => ShowPage(Page.Skins));
+        Wire("Button_Shop", () => ShowPage(Page.Shop));
+        Wire("Button_Edit", () => ShowPage(Page.Edit));
+        Wire("Button_Multi", () => ShowPage(Page.Multi));
+        Wire("Button_OpenChest", OpenChestClicked);
+        Wire("Button_FreeCoins", () =>
+        {
+            PlayerWallet.AddCoins(500);
+            GameAudio.Play(AudioEvent.CoinGain);
+            RefreshShop();
+        });
+        Wire("Button_ChestEquip", () => { equipAfterOpen = true; resultChosen = true; });
+        Wire("Button_ChestOk", () => { equipAfterOpen = false; resultChosen = true; });
         Wire("Button_Settings", () => ShowPage(Page.Settings));
         Wire("Button_Solo", () => ShowPage(Page.Bots));
         Wire("Button_Bots1", () => StartGame(1));
@@ -451,6 +488,12 @@ public class MainMenu : MonoBehaviour
             }
         }
 
+        // zegar na ekranie misji odlicza na bieżąco
+        if (IsOpen && current == Page.Missions)
+        {
+            TickMissionsTimer();
+        }
+
         // animacja przełączników: gałka płynnie jedzie na drugą stronę
         if ((IsOpen && current == Page.Settings) || (PauseOpen && current == Page.PauseSettings))
         {
@@ -492,6 +535,72 @@ public class MainMenu : MonoBehaviour
         }
     }
 
+    // Przycisk "2 NA 2" na ekranie wyboru liczby graczy: ja i bot kontra dwa boty. Ekran jest zbudowany w scenie,
+    // więc przycisk dokładamy z kodu pod trzema istniejącymi (zmniejszając je tak, żeby cztery zmieściły się w kolumnie).
+    void EnsureTeamsButton()
+    {
+        Transform last = FindDeep(transform, "Button_Bots" + MaxBots);
+
+        if (last == null)
+        {
+            return;
+        }
+
+        RectTransform column = (RectTransform)last.parent;
+        Transform existing = column.Find("Button_Teams");
+
+        if (existing == null)
+        {
+            Button button = NewButton(column, "", new Color(0.80f, 0.32f, 0.45f, 1f), StartTeams, 70f, true);
+            button.name = "Button_Teams";
+            existing = button.transform;
+
+            VerticalLayoutGroup layout = column.GetComponent<VerticalLayoutGroup>();
+
+            if (layout != null)
+            {
+                button.gameObject.AddComponent<LayoutElement>();
+
+                int count = column.childCount;
+                float height = Mathf.Floor((column.rect.height - layout.spacing * (count - 1)) / count);
+
+                foreach (Transform child in column)
+                {
+                    LayoutElement element = child.GetComponent<LayoutElement>();
+
+                    if (element != null && height > 40f)
+                    {
+                        element.preferredHeight = Mathf.Min(element.preferredHeight > 0f ? element.preferredHeight : height, height);
+                    }
+                }
+
+                button.GetComponent<LayoutElement>().preferredHeight = height > 40f ? height : 140f;
+            }
+            else
+            {
+                // kolumna bez automatycznego układu: przycisk staje po prawej stronie ekranu
+                existing.SetParent(pages[Page.Bots], false);
+                Anchor((RectTransform)existing, 0.78f, 0.36f, 0.98f, 0.62f);
+            }
+        }
+
+        TextMeshProUGUI label = existing.GetComponentInChildren<TextMeshProUGUI>();
+
+        if (label != null)
+        {
+            label.text = Loc.P("2 NA 2   (ty i bot kontra 2 boty)", "2 VS 2   (you and a bot vs 2 bots)");
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 30f;
+            label.fontSizeMax = 70f;
+        }
+    }
+
+    void StartTeams()
+    {
+        StartGame(MaxBots);
+        GameRules.UseSoloTeams();
+    }
+
     void Show()
     {
         EnsureEventSystem();
@@ -510,6 +619,10 @@ public class MainMenu : MonoBehaviour
 
     void StartGame(int bots)
     {
+        // zwykła gra z botami: domyślne reguły, bez poczekalni
+        GameRules.Reset();
+        LobbyState.End();
+
         botCount = Mathf.Clamp(bots, MinBots, MaxBots);
         PlayerPrefs.SetInt(BotCountKey, botCount);
         PlayerPrefs.Save();
@@ -529,7 +642,28 @@ public class MainMenu : MonoBehaviour
             case Page.Mode:
             case Page.Settings:
             case Page.Skins:
+            case Page.Shop:
+                if (!chestBusy)
+                {
+                    ShowPage(Page.Main);
+                }
+
+                break;
+            case Page.Edit:
+                ShowPage(Page.Skins);
+                break;
+            case Page.Multi:
+                ShowPage(Page.Mode);
+                break;
+            case Page.Profile:
+            case Page.Missions:
                 ShowPage(Page.Main);
+                break;
+            case Page.Icons:
+                ShowPage(Page.Profile);
+                break;
+            case Page.Join:
+                ShowPage(Page.Multi);
                 break;
             case Page.Pause:
                 ClosePause();
@@ -543,6 +677,7 @@ public class MainMenu : MonoBehaviour
     void ShowPage(Page page)
     {
         current = page;
+        CollapsePickers();
 
         foreach (KeyValuePair<Page, RectTransform> entry in pages)
         {
@@ -552,6 +687,24 @@ public class MainMenu : MonoBehaviour
         if (page == Page.Bots)
         {
             HighlightBotChoice();
+            EnsureTeamsButton();
+        }
+
+        if (page == Page.Main)
+        {
+            RefreshProfileBadge();
+        }
+        else if (page == Page.Profile)
+        {
+            RefreshProfile();
+        }
+        else if (page == Page.Icons)
+        {
+            RebuildIcons();
+        }
+        else if (page == Page.Missions)
+        {
+            RefreshMissions();
         }
 
         if (page == Page.Settings || page == Page.PauseSettings)
@@ -564,6 +717,18 @@ public class MainMenu : MonoBehaviour
         else if (page == Page.Skins)
         {
             RebuildSkins();
+        }
+        else if (page == Page.Shop)
+        {
+            RefreshShop();
+        }
+        else if (page == Page.Edit)
+        {
+            RefreshEdit();
+        }
+        else if (page == Page.Multi || page == Page.Join)
+        {
+            RefreshMultiplayer();
         }
     }
 
@@ -628,7 +793,7 @@ public class MainMenu : MonoBehaviour
 
         if (art == null || art.SkinCount == 0)
         {
-            TextMeshProUGUI empty = NewText(skinGrid, "Brak skinów. Dodaj je w obiekcie GameArt (lista Skiny postaci).",
+            TextMeshProUGUI empty = NewText(skinGrid, Loc.T("menu.noskins"),
                 48f, MenuBuilder.CardColor, TextAlignmentOptions.Center);
             empty.name = "EmptyInfo";
             empty.gameObject.AddComponent<LayoutElement>().preferredHeight = 200f;
@@ -671,11 +836,15 @@ public class MainMenu : MonoBehaviour
         }
 
         Image preview = card.transform.Find("Preview").GetComponent<Image>();
-        Sprite sprite = skin.Portrait != null ? skin.Portrait : skin.Front;
+        // w karcie pokazujemy postać od przodu, a gdy skin jej nie ma, buźkę
+        PlayerSprites shown = art.SkinLook(index, PlayerWallet.Equipped(skin.label)) ?? skin;
+        Sprite sprite = shown.Front != null ? shown.Front : shown.Portrait;
         preview.sprite = sprite != null ? sprite : PickupArt.Face(false);
+        preview.preserveAspect = true;
+        ShowPattern(preview, shown.Front != null ? shown.fx : default);
 
         TextMeshProUGUI nameText = card.transform.Find("Name").GetComponent<TextMeshProUGUI>();
-        nameText.text = string.IsNullOrWhiteSpace(skin.label) ? "Skin " + (index + 1) : skin.label;
+        nameText.text = string.IsNullOrWhiteSpace(skin.label) ? "Skin " + (index + 1) : Loc.SkinName(skin.label);
 
         TextMeshProUGUI tag = card.transform.Find("Tag").GetComponent<TextMeshProUGUI>();
 
@@ -692,7 +861,7 @@ public class MainMenu : MonoBehaviour
         {
             bool selected = Mathf.Clamp(SkinSelection.Index, 0, art.SkinCount - 1) == index;
             cardImage.color = selected ? new Color(0.62f, 0.92f, 0.62f, 1f) : normalColor;
-            tag.text = selected ? "WYBRANY" : "";
+            tag.text = selected ? Loc.T("skin.selected") : "";
         });
     }
 

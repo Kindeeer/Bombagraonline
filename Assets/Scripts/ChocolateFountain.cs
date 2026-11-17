@@ -265,6 +265,12 @@ public class ChocolateFountain : MonoBehaviour
     {
         PickupSpawner spawner = PickupSpawner.Instance;
 
+        // runda online: bąbelki wyrzuca tylko host, reszta dostaje je wiadomością
+        if (OnlineMatch.Active && !OnlineMatch.IsHost)
+        {
+            return;
+        }
+
         if (spawner == null || !spawner.TryFindFreeCell(out Vector2Int target))
         {
             return;
@@ -280,7 +286,10 @@ public class ChocolateFountain : MonoBehaviour
         Vector3 from = transform.TransformPoint(new Vector3(0f, SpoutHeight + streamHeight * streamLevel, 0f));
         float flight = bubbleFlightTime + Random.Range(0f, 0.3f);
 
-        spawner.LaunchBubble(definition, target, from, flight, bubbleArcHeight);
+        if (spawner.LaunchBubble(definition, target, from, flight, bubbleArcHeight) != null && OnlineMatch.Active)
+        {
+            OnlineMatch.SendPickup(definition.name, target, true);
+        }
     }
 
     // ---------- Animacja płynącej czekolady ----------

@@ -22,7 +22,17 @@ public enum AudioEvent
     Emote,
     NukeFall,
     NukeExplode,
-    ChaosStart
+    ChaosStart,
+    CoinGain,
+    ShopBuy,
+    ShopDenied,
+    ChestShake,
+    ChestOpen,
+    ChestRevealCommon,
+    ChestRevealRare,
+    ChestRevealEpic,
+    ChestRevealLegendary,
+    ChromaEquip
 }
 
 public enum MusicTrack
@@ -69,7 +79,17 @@ public static class GameAudio
         { AudioEvent.Emote, "event:/SFX/Emote" },
         { AudioEvent.NukeFall, "event:/SFX/NukeFall" },
         { AudioEvent.NukeExplode, "event:/SFX/NukeExplode" },
-        { AudioEvent.ChaosStart, "event:/SFX/ChaosStart" }
+        { AudioEvent.ChaosStart, "event:/SFX/ChaosStart" },
+        { AudioEvent.CoinGain, "event:/SFX/CoinGain" },
+        { AudioEvent.ShopBuy, "event:/SFX/ShopBuy" },
+        { AudioEvent.ShopDenied, "event:/SFX/ShopDenied" },
+        { AudioEvent.ChestShake, "event:/SFX/ChestShake" },
+        { AudioEvent.ChestOpen, "event:/SFX/ChestOpen" },
+        { AudioEvent.ChestRevealCommon, "event:/SFX/ChestRevealCommon" },
+        { AudioEvent.ChestRevealRare, "event:/SFX/ChestRevealRare" },
+        { AudioEvent.ChestRevealEpic, "event:/SFX/ChestRevealEpic" },
+        { AudioEvent.ChestRevealLegendary, "event:/SFX/ChestRevealLegendary" },
+        { AudioEvent.ChromaEquip, "event:/SFX/ChromaEquip" }
     };
 
     static readonly Dictionary<MusicTrack, string> MusicPaths = new Dictionary<MusicTrack, string>

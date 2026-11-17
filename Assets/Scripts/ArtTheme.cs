@@ -25,10 +25,16 @@ public class ArtTheme : ScriptableObject
     public Sprite[] cookieVariants;
     [Tooltip("Gruba czekolada, dwa wybuchy.")]
     public Sprite[] heavyCookieVariants;
+    [Tooltip("Gruba czekolada po pierwszym wybuchu (pęknięta).")]
+    public Sprite heavyCookieCracked;
     public Sprite[] honeyBlockVariants;
     public Sprite[] sodaBlockVariants;
+    [Tooltip("Środek kałuży: wypełnia całe pole.")]
     public Sprite[] honeyPuddleVariants;
     public Sprite[] sodaPuddleVariants;
+    [Tooltip("Brzeg kałuży: płaską krawędzią (dół grafiki) przylega do reszty kałuży, gra obraca go sama.")]
+    public Sprite honeyPuddleSide;
+    public Sprite sodaPuddleSide;
 
     [Header("Fontanna")]
     public Sprite fountainBody;

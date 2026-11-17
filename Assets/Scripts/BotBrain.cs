@@ -46,7 +46,7 @@ public static class DangerMap
         // reakcja łańcuchowa nic tu nie zmienia: każda bomba i tak jest na liście, a suma zasięgów to cały obszar
         foreach (Bomb bomb in BombRegistry.All)
         {
-            BlastCalculator.Calculate(bomb.Cell, bomb.Range, scratch);
+            BlastCalculator.Calculate(bomb.Cell, bomb.Range, scratch, bomb.piercing);
 
             foreach (Vector2Int cell in scratch.flameCells)
             {
@@ -222,10 +222,12 @@ public class BotBrain : MonoBehaviour
     void CollectEnemies(MatchManager match, GridMap map)
     {
         enemyCount = 0;
+        int mySlot = match.SlotOf(health);
 
         foreach (Combatant other in match.Slots)
         {
-            if (other == null || !other.IsAlive || other.health == health)
+            // kolega z drużyny nie jest przeciwnikiem: bot go nie goni i nie próbuje wysadzić
+            if (other == null || !other.IsAlive || other.health == health || Teams.AlliedSlots(mySlot, other.slot))
             {
                 continue;
             }
@@ -394,6 +396,18 @@ public class BotBrain : MonoBehaviour
             {
                 specialCooldownUntil = Time.time + 1f;
                 return pickups.UseSpecial();
+            }
+
+            return false;
+        }
+
+        // mina: bot zostawia ją za sobą w losowym momencie (czasem trafi w przejście, którym chodzą przeciwnicy)
+        if (pickups.HeldItem.special == SpecialItem.Mine)
+        {
+            if (UnityEngine.Random.value < 0.05f && !Mine.Has(cell))
+            {
+                specialCooldownUntil = Time.time + 1f;
+                pickups.UseSpecial();
             }
 
             return false;

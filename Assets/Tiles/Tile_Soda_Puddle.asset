@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 13312, guid: 0000000000000000e000000000000000, type: 0}
   m_Name: Tile_Soda_Puddle
   m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.Tilemaps.Tile
-  m_Sprite: {fileID: 7482667652216324306, guid: 9e2d55f36671138408ed5e9a3b0bb7f1, type: 3}
-  m_Color: {r: 0.23255605, g: 0.735849, b: 0.6105566, a: 1}
+  m_Sprite: {fileID: 21300000, guid: eb53166e198c4c83b6f8d163bc512a65, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Transform:
     e00: 1
     e01: 0

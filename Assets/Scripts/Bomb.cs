@@ -12,7 +12,34 @@ public class Bomb : MonoBehaviour
 
     bool sortingApplied;
 
+    [Header("Animacja bomby (kod, bez klatek)")]
+    [Tooltip("Siła pulsowania bomby. Rośnie, im bliżej wybuchu.")]
+    public float pulseAmount = 0.04f;
+    [Tooltip("Rozmiar bomby w grze (1 = rozmiar z grafiki).")]
+    [Range(0.6f, 1.5f)] public float bombScale = 1f;
+    [Tooltip("O ile podnosimy bombę nad środek pola, żeby stała na swoim polu, a nie wyglądała na przesuniętą w dół.")]
+    public float visualLift = 0.06f;
+
+    Vector3 baseScale = Vector3.one;
+    SpriteRenderer mainSprite;
+    float fuseTotal;
+    float phase;
+
+    void Awake()
+    {
+        baseScale = transform.localScale * bombScale;
+        transform.localScale = baseScale;
+        mainSprite = GetComponent<SpriteRenderer>();
+        phase = UnityEngine.Random.value * 6.28f;
+    }
+
     public event Action<Bomb> Exploded;
+
+    // Slot gracza, który postawił bombę (0 = ja, -1 = bot albo cudzy gracz). Płomienie to pamiętają, żeby liczyć zabójstwa.
+    [System.NonSerialized] public int ownerSlot = -1;
+    // Bomba przebijająca: wybuch nie zatrzymuje się na blokach do zniszczenia (niszczy wszystkie po drodze).
+    [System.NonSerialized] public bool piercing;
+    static readonly Color PierceTint = new Color(0.55f, 0.85f, 1f);
     public Vector2Int Cell { get; private set; }
     public int Range => range;
     public float TimeLeft => timeLeft;
@@ -46,9 +73,10 @@ public class Bomb : MonoBehaviour
 
         Cell = cell;
         timeLeft = fuseTime;
+        fuseTotal = fuseTime;
         range = blastRange;
 
-        transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * sortOffsetY;
+        transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * (sortOffsetY + visualLift);
         GridMap.Instance.SetBomb(cell, true);
         BombRegistry.Register(this);
         GameAudio.Play(AudioEvent.BombPlace, transform.position);
@@ -70,6 +98,27 @@ public class Bomb : MonoBehaviour
         }
 
         UpdateSlide();
+        Animate();
+    }
+
+    // Bomba nie stoi bezczynnie: pulsuje i kołysze się, a im bliżej wybuchu, tym szybciej i mocniej.
+    // W ostatniej chwili miga na czerwono.
+    void Animate()
+    {
+        float urgency = fuseTotal > 0f ? 1f - Mathf.Clamp01(timeLeft / fuseTotal) : 0f;
+        float t = Time.time + phase;
+        float speed = Mathf.Lerp(3f, 9f, urgency);
+        float beat = Mathf.Sin(t * speed);
+        float amount = pulseAmount * Mathf.Lerp(0.8f, 1.8f, urgency);
+
+        transform.localScale = Vector3.Scale(baseScale, new Vector3(1f + beat * amount, 1f - beat * amount * 0.8f, 1f));
+        transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * speed * 0.5f) * Mathf.Lerp(1f, 3f, urgency));
+
+        if (mainSprite != null)
+        {
+            float flash = timeLeft < 0.8f && Mathf.Sin(Time.time * 24f) > 0f ? 0.5f : 0f;
+            mainSprite.color = Color.Lerp(piercing ? PierceTint : Color.white, new Color(1f, 0.4f, 0.3f), flash);
+        }
     }
 
     // ---------- Odkopywanie (przedmiot "Kopanie bomb") ----------
@@ -128,7 +177,7 @@ public class Bomb : MonoBehaviour
         BombRegistry.Register(this);
 
         slideFrom = transform.position;
-        slideTo = GridMap.Instance.GridToWorld(Cell) + Vector3.up * sortOffsetY;
+        slideTo = GridMap.Instance.GridToWorld(Cell) + Vector3.up * (sortOffsetY + visualLift);
         slideProgress = 0f;
         sliding = true;
     }
@@ -212,12 +261,12 @@ public class Bomb : MonoBehaviour
         BombRegistry.Unregister(this);
         GridMap.Instance.SetBomb(Cell, false);
 
-        BlastResult blast = BlastCalculator.Calculate(Cell, range);
+        BlastResult blast = BlastCalculator.Calculate(Cell, range, piercing);
 
         foreach (Vector2Int cell in blast.flameCells)
         {
             Flame flame = Instantiate(flamePrefab);
-            flame.Init(cell);
+            flame.Init(cell, ownerSlot);
         }
 
         foreach (Vector2Int cell in blast.blocksToDestroy)
@@ -293,15 +342,16 @@ public static class BlastCalculator
         Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right
     };
 
-    public static BlastResult Calculate(Vector2Int origin, int range)
+    public static BlastResult Calculate(Vector2Int origin, int range, bool piercing = false)
     {
         BlastResult result = new BlastResult();
-        Calculate(origin, range, result);
+        Calculate(origin, range, result, piercing);
         return result;
     }
 
     // Wersja bez alokacji: czyści i wypełnia podany wynik. Używa jej AI botów kilka razy na sekundę.
-    public static void Calculate(Vector2Int origin, int range, BlastResult result)
+    // piercing = true: wybuch leci dalej przez bloki do zniszczenia (zatrzymują go tylko ściany i inne bomby).
+    public static void Calculate(Vector2Int origin, int range, BlastResult result, bool piercing = false)
     {
         result.Clear();
         result.flameCells.Add(origin);
@@ -323,6 +373,12 @@ public static class BlastCalculator
                 if (TileRules.IsDestructible(tile))
                 {
                     result.blocksToDestroy.Add(cell);
+
+                    if (piercing)
+                    {
+                        continue;
+                    }
+
                     break;
                 }
 
