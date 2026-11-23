@@ -108,3 +108,6 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 .claude/
+# FMOD for Unity: pliki generowane przez Unity
+Assets/Plugins/FMOD/Cache/
+Assets/Plugins/FMOD/Cache.meta

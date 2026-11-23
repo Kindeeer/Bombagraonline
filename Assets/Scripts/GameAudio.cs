@@ -51,6 +51,8 @@ public enum MusicTrack
 //
 // UMOWA Z DŹWIĘKOWCEM (nazwy w FMOD Studio)
 // - Magistrale: bus:/SFX (efekty) i bus:/Music (muzyka). Przyciski Mute Sound i Mute Music wyciszają właśnie je.
+// - Podpinanie eventów: Assets/Resources/AudioManager.prefab (komponent AudioManager). Lista wszystkich zdarzeń gry z polem
+//   Event Reference przy każdym. Puste pole = użyta zostaje nazwa z tabeli Paths poniżej.
 // - Zdarzenia efektów: event:/SFX/<nazwa z enum AudioEvent>, np. event:/SFX/BombExplode (pełna lista w tabeli Paths).
 // - Muzyka: event:/Music/Menu i event:/Music/Game (jedna instancja naraz, zmiana utworu zatrzymuje poprzedni).
 // - Parametry globalne ustawia SetParameter(nazwa, wartość).
@@ -189,7 +191,13 @@ public static class GameAudio
             Debug.Log("[Audio] " + audioEvent + "  ->  " + path);
         }
 
-        if (MuteSound || path.Length == 0)
+        if (MuteSound)
+        {
+            return;
+        }
+
+        // najpierw event podpięty w AudioManagerze (inspektor), a gdy go nie ma, nazwa z tabeli Paths
+        if (PlayAssigned(audioEvent, position) || path.Length == 0)
         {
             return;
         }
@@ -254,6 +262,28 @@ public static class GameAudio
         }
     }
 
+    // Gra event podpięty w AudioManagerze. Zwraca false, gdy dla tego zdarzenia nic nie podpięto.
+    static bool PlayAssigned(AudioEvent audioEvent, Vector3 position)
+    {
+        if (!AudioManager.TryGet(audioEvent, out FMODUnity.EventReference reference))
+        {
+            return false;
+        }
+
+        EnsureMutes();
+
+        try
+        {
+            FMODUnity.RuntimeManager.PlayOneShot(reference, position);
+        }
+        catch (System.Exception exception)
+        {
+            WarnOnce("zdarzenie " + audioEvent, exception);
+        }
+
+        return true;
+    }
+
     static void StartMusic(MusicTrack track)
     {
         try
@@ -265,13 +295,26 @@ public static class GameAudio
                 musicInstanceValid = false;
             }
 
-            if (track == MusicTrack.None || !MusicPaths.TryGetValue(track, out string path))
+            if (track == MusicTrack.None)
             {
                 return;
             }
 
             EnsureMutes();
-            musicInstance = FMODUnity.RuntimeManager.CreateInstance(path);
+
+            if (AudioManager.TryGetMusic(track, out FMODUnity.EventReference assigned))
+            {
+                musicInstance = FMODUnity.RuntimeManager.CreateInstance(assigned);
+            }
+            else if (MusicPaths.TryGetValue(track, out string path))
+            {
+                musicInstance = FMODUnity.RuntimeManager.CreateInstance(path);
+            }
+            else
+            {
+                return;
+            }
+
             musicInstance.start();
             musicInstanceValid = true;
         }
@@ -316,6 +359,11 @@ public static class GameAudio
         }
     }
 #else
+    static bool PlayAssigned(AudioEvent audioEvent, Vector3 position)
+    {
+        return false;
+    }
+
     static void PlayOneShot(string path, Vector3 position)
     {
         // bez FMOD nic nie gra
