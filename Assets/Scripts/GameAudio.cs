@@ -196,6 +196,7 @@ public static class GameAudio
         LogEvents = false;
 #if FMOD_PRESENT
         musicInstanceValid = false;
+        missingPaths.Clear();
 #endif
     }
 
@@ -370,9 +371,40 @@ public static class GameAudio
     static bool musicInstanceValid;
     static readonly HashSet<string> warned = new HashSet<string>();
 
+    // Stare nazwy eventów (tabela Paths) są tylko zapasem. Gdy ich nie ma w bankach, po cichu je pomijamy, zamiast zasypywać
+    // Console ostrzeżeniami przy każdym dźwięku. Prawdziwe problemy (zły event podpięty w AudioManagerze) dalej są zgłaszane.
+    static readonly HashSet<string> missingPaths = new HashSet<string>();
+
+    static bool PathExists(string path)
+    {
+        if (missingPaths.Contains(path))
+        {
+            return false;
+        }
+
+        // banki jeszcze się wczytują: nie wiemy, czy event istnieje, więc na razie nie gramy i niczego nie zapamiętujemy
+        if (!FMODUnity.RuntimeManager.HaveAllBanksLoaded)
+        {
+            return false;
+        }
+
+        if (FMODUnity.RuntimeManager.StudioSystem.getEvent(path, out FMOD.Studio.EventDescription description) == FMOD.RESULT.OK)
+        {
+            return true;
+        }
+
+        missingPaths.Add(path);
+        return false;
+    }
+
     static void PlayOneShot(string path, Vector3 position)
     {
         EnsureMutes();
+
+        if (!PathExists(path))
+        {
+            return;
+        }
 
         try
         {
@@ -396,7 +428,7 @@ public static class GameAudio
             {
                 instance = FMODUnity.RuntimeManager.CreateInstance(reference);
             }
-            else if (PathOf(audioEvent).Length > 0)
+            else if (PathOf(audioEvent).Length > 0 && PathExists(PathOf(audioEvent)))
             {
                 instance = FMODUnity.RuntimeManager.CreateInstance(PathOf(audioEvent));
             }
@@ -480,7 +512,7 @@ public static class GameAudio
             {
                 musicInstance = FMODUnity.RuntimeManager.CreateInstance(assigned);
             }
-            else if (MusicPaths.TryGetValue(track, out string path))
+            else if (MusicPaths.TryGetValue(track, out string path) && PathExists(path))
             {
                 musicInstance = FMODUnity.RuntimeManager.CreateInstance(path);
             }
