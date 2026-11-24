@@ -46,7 +46,15 @@ public enum AudioEvent
     EmoteAngry,
     EmoteLaugh,
     EmoteCry,
-    EmoteLike
+    EmoteLike,
+    BlockCrack,
+    HoneyBreak,
+    SodaBreak,
+    BuffSpawned,
+    FountainSplash,
+    CameraZoomIn,
+    CameraZoomOut,
+    KillCoin
 }
 
 public enum MusicTrack
@@ -121,7 +129,12 @@ public static class GameAudio
         { AudioEvent.EmoteAngry, AudioEvent.Emote },
         { AudioEvent.EmoteLaugh, AudioEvent.Emote },
         { AudioEvent.EmoteCry, AudioEvent.Emote },
-        { AudioEvent.EmoteLike, AudioEvent.Emote }
+        { AudioEvent.EmoteLike, AudioEvent.Emote },
+        // rozbicie grubej czekolady (pierwsze trafienie), miodu i sody grają dźwięk rozbicia ciastka, dopóki nie mają własnych
+        { AudioEvent.BlockCrack, AudioEvent.BlockBreak },
+        { AudioEvent.HoneyBreak, AudioEvent.BlockBreak },
+        { AudioEvent.SodaBreak, AudioEvent.BlockBreak },
+        { AudioEvent.KillCoin, AudioEvent.CoinGain }
     };
 
     static readonly Dictionary<MusicTrack, string> MusicPaths = new Dictionary<MusicTrack, string>

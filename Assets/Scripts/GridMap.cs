@@ -772,15 +772,18 @@ public class GridMap : MonoBehaviour
                 crackedBlock[i] = true;
                 grid[i] = TileType.Cookie;
                 UpdateTileVisual(cell.x, cell.y);
+                GameAudio.Play(AudioEvent.BlockCrack, GridToWorld(cell));
                 break;
             case TileType.HoneyBlock:
                 blockLastHitBy[i] = null;
                 SpreadPuddle(cell, TileType.HoneyPuddle, honeyPuddleDuration);
+                GameAudio.Play(AudioEvent.HoneyBreak, GridToWorld(cell));
                 BlockDestroyed?.Invoke(cell, current);
                 break;
             case TileType.SodaBlock:
                 blockLastHitBy[i] = null;
                 SpreadPuddle(cell, TileType.SodaPuddle, sodaPuddleDuration);
+                GameAudio.Play(AudioEvent.SodaBreak, GridToWorld(cell));
                 BlockDestroyed?.Invoke(cell, current);
                 break;
         }

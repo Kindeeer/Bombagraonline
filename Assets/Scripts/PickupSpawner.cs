@@ -118,6 +118,12 @@ public class PickupSpawner : MonoBehaviour
 
         PickupItem item = new GameObject("Pickup_" + definition.name).AddComponent<PickupItem>();
         item.InitOnGround(definition, cell, table != null ? table.fireImmuneSeconds : 0.7f);
+
+        if (GridMap.Instance != null)
+        {
+            GameAudio.Play(AudioEvent.BuffSpawned, GridMap.Instance.GridToWorld(cell));
+        }
+
         return item;
     }
 
@@ -130,6 +136,10 @@ public class PickupSpawner : MonoBehaviour
 
         PickupItem item = new GameObject("Bubble_" + definition.name).AddComponent<PickupItem>();
         item.InitInFlight(definition, cell, from, flightTime, arcHeight);
+
+        // bąbelek wylatuje z fontanny: plusk fontanny i pojawienie się przedmiotu
+        GameAudio.Play(AudioEvent.FountainSplash, from);
+        GameAudio.Play(AudioEvent.BuffSpawned, from);
         return item;
     }
 

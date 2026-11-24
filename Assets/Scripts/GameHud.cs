@@ -991,6 +991,26 @@ public class GameHud : MonoBehaviour
         }
 
         RectTransform rect = mapFrameImage.rectTransform;
+
+        // W grze ramka stoi dokładnie na oknie kamery (jej viewporcie), bez względu na to, kto to okno ustawił: panele HUD
+        // albo poczekalnia. Dzięki temu ramka nigdy nie jest węższa ani szersza od widocznej planszy.
+        if (arenaCameraCache == null)
+        {
+            arenaCameraCache = FindAnyObjectByType<ArenaCamera>();
+        }
+
+        Camera arenaCamera = arenaCameraCache != null ? arenaCameraCache.GetComponent<Camera>() : null;
+
+        if (Application.isPlaying && arenaCamera != null && lastSafeArea.width > 0f)
+        {
+            Rect view = arenaCamera.pixelRect;
+            rect.anchorMin = new Vector2((view.xMin - lastSafeArea.xMin) / lastSafeArea.width, 0f);
+            rect.anchorMax = new Vector2((view.xMax - lastSafeArea.xMin) / lastSafeArea.width, 1f);
+            rect.offsetMin = new Vector2(-FrameOverlap, 0f);
+            rect.offsetMax = new Vector2(FrameOverlap, 0f);
+            return;
+        }
+
         rect.anchorMin = new Vector2(leftPanel.anchorMax.x, 0f);
         // w poczekalni prawy panel HUD jest wyłączony, a ramka kończy się tam, gdzie zaczyna się panel zasad
         float right = LobbyState.InLobby ? Mathf.Min(rightPanel.anchorMin.x, LobbyController.PanelStartFraction) : rightPanel.anchorMin.x;

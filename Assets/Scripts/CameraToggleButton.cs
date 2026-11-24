@@ -47,6 +47,7 @@ public class CameraToggleButton : MonoBehaviour, IPointerClickHandler
         }
 
         arenaCamera.CycleMode();
+        GameAudio.Play(arenaCamera.Mode == ArenaCamera.ViewMode.Close ? AudioEvent.CameraZoomIn : AudioEvent.CameraZoomOut);
         Refresh();
     }
 

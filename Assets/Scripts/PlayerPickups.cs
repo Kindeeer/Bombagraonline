@@ -533,6 +533,8 @@ public class PlayerPickups : MonoBehaviour
 
         if (occupant != null)
         {
+            // dźwięk użycia buffa na następną bombę (np. Bigger Blast): gra przy postawieniu bomby
+            GameAudio.PlayPickupUse(occupant.definition, transform.position);
             ConsumeUse(occupant);
         }
     }

@@ -423,7 +423,7 @@ public class MatchManager : MonoBehaviour
             if (killer.slot == 0)
             {
                 PlayerWallet.AddCoins(PlayerWallet.PlayerKillReward);
-                GameAudio.Play(AudioEvent.CoinGain);
+                GameAudio.Play(AudioEvent.KillCoin);
             }
         }
     }
