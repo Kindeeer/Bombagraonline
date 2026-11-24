@@ -703,6 +703,7 @@ public static class OnlineMatch
             // fioletowy okrąg i efekt widzą wszyscy (u innych to tylko wygląd kopii gracza),
             // a naprawdę klątwa działa na telefonie trafionego gracza, bo tylko on steruje swoją postacią
             PulseRing.Spawn(combatant.pickups.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
+            GameAudio.Play(AudioEvent.CurseHit, combatant.pickups.transform.position);
 
             if (definition != null)
             {

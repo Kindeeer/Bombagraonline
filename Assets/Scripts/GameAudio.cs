@@ -32,7 +32,17 @@ public enum AudioEvent
     ChestRevealRare,
     ChestRevealEpic,
     ChestRevealLegendary,
-    ChromaEquip
+    ChromaEquip,
+    // nowe zdarzenia: nie mają stałej nazwy w FMOD, grają tylko po podpięciu w AudioManagerze (a bez tego zapasowy dźwięk, jeśli jest)
+    RoundLose,
+    MatchWin,
+    MinePlace,
+    MineExplode,
+    Freeze,
+    CurseHit,
+    ResultsShow,
+    LevelUp,
+    MissionClaim
 }
 
 public enum MusicTrack
@@ -77,7 +87,6 @@ public static class GameAudio
         { AudioEvent.RoundReady, "event:/SFX/RoundReady" },
         { AudioEvent.RoundGo, "event:/SFX/RoundGo" },
         { AudioEvent.RoundWin, "event:/SFX/RoundWin" },
-        { AudioEvent.RoundDraw, "event:/SFX/RoundDraw" },
         { AudioEvent.Emote, "event:/SFX/Emote" },
         { AudioEvent.NukeFall, "event:/SFX/NukeFall" },
         { AudioEvent.NukeExplode, "event:/SFX/NukeExplode" },
@@ -92,6 +101,18 @@ public static class GameAudio
         { AudioEvent.ChestRevealEpic, "event:/SFX/ChestRevealEpic" },
         { AudioEvent.ChestRevealLegendary, "event:/SFX/ChestRevealLegendary" },
         { AudioEvent.ChromaEquip, "event:/SFX/ChromaEquip" }
+    };
+
+    // Zdarzenia bez własnego eventu w FMOD grają dźwięk zapasowy z tej tabeli, dopóki dźwiękowiec nie podepnie własnego
+    // w AudioManagerze. Zdarzenia bez wpisu w obu miejscach są ciche.
+    static readonly Dictionary<AudioEvent, AudioEvent> Fallbacks = new Dictionary<AudioEvent, AudioEvent>
+    {
+        // remis nie wymaga osobnego dźwięku: bez podpiętego RoundDraw gra ten sam sygnał co przy przegranej
+        { AudioEvent.RoundDraw, AudioEvent.RoundLose },
+        { AudioEvent.MatchWin, AudioEvent.RoundWin },
+        { AudioEvent.MinePlace, AudioEvent.BombPlace },
+        { AudioEvent.MineExplode, AudioEvent.BombExplode },
+        { AudioEvent.MissionClaim, AudioEvent.CoinGain }
     };
 
     static readonly Dictionary<MusicTrack, string> MusicPaths = new Dictionary<MusicTrack, string>
@@ -188,7 +209,7 @@ public static class GameAudio
 
         if (LogEvents)
         {
-            Debug.Log("[Audio] " + audioEvent + "  ->  " + path);
+            Debug.Log("[Audio] " + audioEvent + "  ->  " + (path.Length > 0 ? path : "(tylko z AudioManagera)"));
         }
 
         if (MuteSound)
@@ -196,13 +217,50 @@ public static class GameAudio
             return;
         }
 
-        // najpierw event podpięty w AudioManagerze (inspektor), a gdy go nie ma, nazwa z tabeli Paths
-        if (PlayAssigned(audioEvent, position) || path.Length == 0)
+        // najpierw event podpięty w AudioManagerze (inspektor), potem nazwa z tabeli Paths, na końcu dźwięk zapasowy
+        if (PlayAssigned(audioEvent, position))
         {
             return;
         }
 
-        PlayOneShot(path, position);
+        if (path.Length > 0)
+        {
+            PlayOneShot(path, position);
+        }
+        else if (Fallbacks.TryGetValue(audioEvent, out AudioEvent fallback))
+        {
+            Play(fallback, position);
+        }
+    }
+
+    // Zebranie przedmiotu: dźwięk podpięty przy tym przedmiocie w AudioManagerze, a gdy go nie ma, wspólny PickupCollect.
+    public static void PlayPickupCollect(PickupDefinition item, Vector3 position)
+    {
+        if (item != null && PlayPickupAssigned(item, false, position))
+        {
+            return;
+        }
+
+        Play(AudioEvent.PickupCollect, position);
+    }
+
+    // Użycie przedmiotu specjalnego (młotek, rakieta, mina...). Gra tylko wtedy, gdy dźwiękowiec podpiął dźwięk użycia.
+    public static void PlayPickupUse(PickupDefinition item, Vector3 position)
+    {
+        if (item != null)
+        {
+            PlayPickupAssigned(item, true, position);
+        }
+    }
+
+    static bool PlayPickupAssigned(PickupDefinition item, bool use, Vector3 position)
+    {
+        if (LogEvents)
+        {
+            Debug.Log("[Audio] Przedmiot " + item.name + (use ? " (użycie)" : " (zebranie)"));
+        }
+
+        return !MuteSound && PlayPickupEvent(item, use, position);
     }
 
     public static void PlayMusic(MusicTrack track)
@@ -263,6 +321,27 @@ public static class GameAudio
     }
 
     // Gra event podpięty w AudioManagerze. Zwraca false, gdy dla tego zdarzenia nic nie podpięto.
+    static bool PlayPickupEvent(PickupDefinition item, bool use, Vector3 position)
+    {
+        if (!AudioManager.TryGetPickup(item, use, out FMODUnity.EventReference reference))
+        {
+            return false;
+        }
+
+        EnsureMutes();
+
+        try
+        {
+            FMODUnity.RuntimeManager.PlayOneShot(reference, position);
+        }
+        catch (System.Exception exception)
+        {
+            WarnOnce("przedmiot " + item.name, exception);
+        }
+
+        return true;
+    }
+
     static bool PlayAssigned(AudioEvent audioEvent, Vector3 position)
     {
         if (!AudioManager.TryGet(audioEvent, out FMODUnity.EventReference reference))
@@ -359,6 +438,11 @@ public static class GameAudio
         }
     }
 #else
+    static bool PlayPickupEvent(PickupDefinition item, bool use, Vector3 position)
+    {
+        return false;
+    }
+
     static bool PlayAssigned(AudioEvent audioEvent, Vector3 position)
     {
         return false;

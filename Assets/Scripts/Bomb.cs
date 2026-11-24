@@ -48,7 +48,11 @@ public class Bomb : MonoBehaviour
     int range;
     bool hasExploded;
 
-    public void Init(Vector2Int cell, float fuseTime, int blastRange)
+    // Dźwięk wybuchu tej bomby (mina podmienia go na własny).
+    [System.NonSerialized] public AudioEvent explodeSound = AudioEvent.BombExplode;
+
+    // silent = true: bez dźwięku postawienia (mina robi to sama).
+    public void Init(Vector2Int cell, float fuseTime, int blastRange, bool silent = false)
     {
         if (!sortingApplied)
         {
@@ -79,7 +83,11 @@ public class Bomb : MonoBehaviour
         transform.position = GridMap.Instance.GridToWorld(cell) + Vector3.up * (sortOffsetY + visualLift);
         GridMap.Instance.SetBomb(cell, true);
         BombRegistry.Register(this);
-        GameAudio.Play(AudioEvent.BombPlace, transform.position);
+
+        if (!silent)
+        {
+            GameAudio.Play(AudioEvent.BombPlace, transform.position);
+        }
     }
 
     void Update()
@@ -256,7 +264,7 @@ public class Bomb : MonoBehaviour
     void Explode()
     {
         hasExploded = true;
-        GameAudio.Play(AudioEvent.BombExplode, transform.position);
+        GameAudio.Play(explodeSound, transform.position);
 
         BombRegistry.Unregister(this);
         GridMap.Instance.SetBomb(Cell, false);

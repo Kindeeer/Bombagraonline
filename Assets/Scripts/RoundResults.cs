@@ -85,6 +85,14 @@ public class RoundResults : MonoBehaviour
         // doświadczenie za tę rundę i poziom konta (przy awansie złoty napis z nagrodą)
         RoundProgress progress = PlayerProgress.LastRound;
         int level = PlayerProgress.Level;
+
+        GameAudio.Play(AudioEvent.ResultsShow);
+
+        if (progress.LeveledUp)
+        {
+            GameAudio.Play(AudioEvent.LevelUp);
+        }
+
         string xpLine = progress.LeveledUp
             ? Loc.P("AWANS NA POZIOM ", "LEVEL UP: ") + level + "!  +" + progress.levelCoins + Loc.P(" monet", " coins")
             : "+" + progress.xp + " XP   •   " + Loc.P("poziom ", "level ") + level + "  (" + PlayerProgress.XpInLevel + " / " + PlayerProgress.XpToNext(level) + ")";

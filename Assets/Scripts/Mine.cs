@@ -72,7 +72,7 @@ public class Mine : MonoBehaviour
         lamp.transform.localScale = Vector3.one * (0.16f / Mathf.Max(0.01f, size));
 
         mines[cell] = mine;
-        GameAudio.Play(AudioEvent.BombPlace, go.transform.position);
+        GameAudio.Play(AudioEvent.MinePlace, go.transform.position);
         return true;
     }
 
@@ -173,7 +173,8 @@ public class Mine : MonoBehaviour
         else if (bombPrefab != null)
         {
             Bomb bomb = Instantiate(bombPrefab);
-            bomb.Init(cell, 0.05f, BlastRange);
+            bomb.explodeSound = AudioEvent.MineExplode;
+            bomb.Init(cell, 0.05f, BlastRange, true);
             bomb.ownerSlot = ownerSlot;
         }
 

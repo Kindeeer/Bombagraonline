@@ -518,7 +518,7 @@ public partial class MainMenu
     {
         if (DailyMissions.Claim(index))
         {
-            GameAudio.Play(AudioEvent.CoinGain);
+            GameAudio.Play(AudioEvent.MissionClaim);
         }
 
         RefreshMissions();

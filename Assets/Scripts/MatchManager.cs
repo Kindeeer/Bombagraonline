@@ -837,7 +837,11 @@ public class MatchManager : MonoBehaviour
         int winsToEnd = GameRules.Custom ? GameRules.Current.winsToEnd : LobbySettings.WinsEndless;
         MatchOver = scorePoint && winner != null && winsToEnd < LobbySettings.WinsEndless && scores[winner.slot] >= Mathf.Max(1, winsToEnd);
 
-        GameAudio.Play(winner == null ? AudioEvent.RoundDraw : AudioEvent.RoundWin);
+        // dźwięk końca rundy zależy od mnie: wygrałem (ja albo moja drużyna), przegrałem (wygrał ktoś inny) albo remis
+        AudioEvent endSound = winner == null ? AudioEvent.RoundDraw
+            : IsWinner(Slots[0], winner) ? (MatchOver ? AudioEvent.MatchWin : AudioEvent.RoundWin)
+            : AudioEvent.RoundLose;
+        GameAudio.Play(endSound);
         banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "")
             : teamWin ? Teams.NameOf(winner.team) + (MatchOver ? Loc.P(" WYGRYWAJĄ MECZ!", " WINS THE MATCH!") : Loc.P(" WYGRYWAJĄ RUNDĘ", " WINS THE ROUND"))
             : MatchOver ? NameOf(winner) + Loc.P(" WYGRYWA MECZ!", " WINS THE MATCH!")

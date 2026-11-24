@@ -179,7 +179,7 @@ public class PlayerPickups : MonoBehaviour
 
             if (OnlineMatch.Active && victim != null)
             {
-                GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+                GameAudio.Play(AudioEvent.CurseHit, victim.transform.position);
                 PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
 
                 // u mnie kopia trafionego gracza dostaje klątwę tylko dla wyglądu (np. lodowy kolor),
@@ -191,7 +191,7 @@ public class PlayerPickups : MonoBehaviour
 
             if (victim != null)
             {
-                GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+                GameAudio.Play(AudioEvent.CurseHit, victim.transform.position);
                 PulseRing.Spawn(victim.transform.position, new Color(0.78f, 0.35f, 1f, 1f));
                 victim.Apply(definition);
                 return;
@@ -260,7 +260,7 @@ public class PlayerPickups : MonoBehaviour
             }
         }
 
-        GameAudio.Play(AudioEvent.PickupCollect, transform.position);
+        GameAudio.PlayPickupCollect(definition, transform.position);
 
         // atomówka: po podniesieniu człowiek od razu staje i wybiera, gdzie ją zrzucić (bot robi to sam w BotBrain)
         if (definition.special == SpecialItem.Nuke && movement != null && movement.useKeyboard)
@@ -387,6 +387,7 @@ public class PlayerPickups : MonoBehaviour
                 break;
             case PickupEffect.Freeze:
                 frozenCount++;
+                GameAudio.Play(AudioEvent.Freeze, transform.position);
                 break;
         }
     }
@@ -574,6 +575,7 @@ public class PlayerPickups : MonoBehaviour
 
         if (used)
         {
+            GameAudio.PlayPickupUse(item, transform.position);
             ConsumeUse(occupant);
         }
 
