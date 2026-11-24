@@ -54,7 +54,35 @@ public enum AudioEvent
     FountainSplash,
     CameraZoomIn,
     CameraZoomOut,
-    KillCoin
+    KillCoin,
+    PlayClick,
+    // dźwięk w tle w pętli (fontanna): startuje i kończy go kod przez GameAudio.StartLoop
+    FountainIdle
+}
+
+// Uchwyt do dźwięku w pętli. Stop() wyłącza go z krótkim wyciszeniem (fade-out z eventu).
+public sealed class AudioLoop
+{
+#if FMOD_PRESENT
+    public FMOD.Studio.EventInstance instance;
+#endif
+
+    bool stopped;
+
+    public void Stop()
+    {
+        if (stopped)
+        {
+            return;
+        }
+
+        stopped = true;
+
+#if FMOD_PRESENT
+        instance.stop(FMOD.Studio.STOP_MODE.ALLOWFADEOUT);
+        instance.release();
+#endif
+    }
 }
 
 public enum MusicTrack
@@ -134,7 +162,9 @@ public static class GameAudio
         { AudioEvent.BlockCrack, AudioEvent.BlockBreak },
         { AudioEvent.HoneyBreak, AudioEvent.BlockBreak },
         { AudioEvent.SodaBreak, AudioEvent.BlockBreak },
-        { AudioEvent.KillCoin, AudioEvent.CoinGain }
+        { AudioEvent.KillCoin, AudioEvent.CoinGain },
+        // przycisk PLAY w menu głównym gra zwykły klik, dopóki nie ma własnego dźwięku
+        { AudioEvent.PlayClick, AudioEvent.UiClick }
     };
 
     static readonly Dictionary<MusicTrack, string> MusicPaths = new Dictionary<MusicTrack, string>
@@ -285,6 +315,18 @@ public static class GameAudio
         return !MuteSound && PlayPickupEvent(item, use, position);
     }
 
+    // Dźwięk w tle w pętli (np. fontanna): event w FMOD ma być zapętlony. Zwraca uchwyt do zatrzymania (null, gdy nic nie gra).
+    // Gra tylko po podpięciu eventu w AudioManagerze (albo gdy ma ścieżkę w tabeli Paths). Pozycja jest stała.
+    public static AudioLoop StartLoop(AudioEvent audioEvent, Vector3 position)
+    {
+        if (LogEvents)
+        {
+            Debug.Log("[Audio] Pętla: " + audioEvent);
+        }
+
+        return StartLoopInternal(audioEvent, position);
+    }
+
     public static void PlayMusic(MusicTrack track)
     {
         if (track == currentMusic)
@@ -343,6 +385,37 @@ public static class GameAudio
     }
 
     // Gra event podpięty w AudioManagerze. Zwraca false, gdy dla tego zdarzenia nic nie podpięto.
+    static AudioLoop StartLoopInternal(AudioEvent audioEvent, Vector3 position)
+    {
+        try
+        {
+            EnsureMutes();
+            FMOD.Studio.EventInstance instance;
+
+            if (AudioManager.TryGet(audioEvent, out FMODUnity.EventReference reference))
+            {
+                instance = FMODUnity.RuntimeManager.CreateInstance(reference);
+            }
+            else if (PathOf(audioEvent).Length > 0)
+            {
+                instance = FMODUnity.RuntimeManager.CreateInstance(PathOf(audioEvent));
+            }
+            else
+            {
+                return null;
+            }
+
+            instance.set3DAttributes(FMODUnity.RuntimeUtils.To3DAttributes(position));
+            instance.start();
+            return new AudioLoop { instance = instance };
+        }
+        catch (System.Exception exception)
+        {
+            WarnOnce("pętla " + audioEvent, exception);
+            return null;
+        }
+    }
+
     static bool PlayPickupEvent(PickupDefinition item, bool use, Vector3 position)
     {
         if (!AudioManager.TryGetPickup(item, use, out FMODUnity.EventReference reference))
@@ -460,6 +533,11 @@ public static class GameAudio
         }
     }
 #else
+    static AudioLoop StartLoopInternal(AudioEvent audioEvent, Vector3 position)
+    {
+        return null;
+    }
+
     static bool PlayPickupEvent(PickupDefinition item, bool use, Vector3 position)
     {
         return false;

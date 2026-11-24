@@ -341,7 +341,12 @@ public partial class MainMenu : MonoBehaviour
 
     void Bind()
     {
-        Wire("Button_Play", () => ShowPage(Page.Mode));
+        // PLAY ma własny dźwięk klikania (bez niego gra zwykły klik)
+        Wire("Button_Play", () =>
+        {
+            GameAudio.Play(AudioEvent.PlayClick);
+            ShowPage(Page.Mode);
+        }, false);
         Wire("Button_Skins", () => ShowPage(Page.Skins));
         Wire("Button_Shop", () => ShowPage(Page.Shop));
         Wire("Button_Edit", () => ShowPage(Page.Edit));
@@ -384,13 +389,13 @@ public partial class MainMenu : MonoBehaviour
     }
 
     // Podpina akcję pod wszystkie przyciski o danej nazwie (np. kilka przycisków Wstecz).
-    void Wire(string objectName, Action action)
+    void Wire(string objectName, Action action, bool clickSound = true)
     {
         foreach (Button button in GetComponentsInChildren<Button>(true))
         {
             if (button.name == objectName)
             {
-                WireClick(button, action, true);
+                WireClick(button, action, clickSound);
             }
         }
     }

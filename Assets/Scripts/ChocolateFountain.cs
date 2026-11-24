@@ -151,10 +151,44 @@ public class ChocolateFountain : MonoBehaviour
         streamRenderer.enabled = false;
     }
 
+    AudioLoop idleLoop;
+    bool idleStartTried;
+
+    void OnDisable()
+    {
+        StopIdleSound();
+    }
+
+    void OnDestroy()
+    {
+        StopIdleSound();
+    }
+
+    void StopIdleSound()
+    {
+        if (idleLoop != null)
+        {
+            idleLoop.Stop();
+            idleLoop = null;
+        }
+    }
+
     void Update()
     {
         float dt = Time.deltaTime;
         time += dt;
+
+        // szum fontanny w tle gra, gdy menu główne jest zamknięte (w menu zostaje sama muzyka)
+        if (!MainMenu.IsOpen && idleLoop == null && !idleStartTried)
+        {
+            idleStartTried = true;
+            idleLoop = GameAudio.StartLoop(AudioEvent.FountainIdle, transform.position);
+        }
+        else if (MainMenu.IsOpen && idleLoop != null)
+        {
+            StopIdleSound();
+            idleStartTried = false;
+        }
 
         // przed startem rundy (menu, READY) fontanna czeka i nie wyrzuca przedmiotów
         if (!MatchManager.InputLocked)
