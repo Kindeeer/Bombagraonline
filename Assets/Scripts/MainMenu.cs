@@ -365,7 +365,8 @@ public partial class MainMenu : MonoBehaviour
         Wire("Button_Bots1", () => StartGame(1));
         Wire("Button_Bots2", () => StartGame(2));
         Wire("Button_Bots3", () => StartGame(3));
-        Wire("Button_Back", Back);
+        // Wstecz ma własny dźwięk (UiBack), więc przycisk nie gra zwykłego kliknięcia
+        Wire("Button_Back", Back, false);
 
         // Multi: przycisk jest, ale nieaktywny, dopóki nie powstanie tryb sieciowy
         Transform multi = FindDeep(transform, "Button_Multi");
@@ -380,7 +381,11 @@ public partial class MainMenu : MonoBehaviour
         Wire("Button_Resume", ClosePause);
         Wire("Button_PauseSettings", () => ShowPage(Page.PauseSettings));
         Wire("Button_Quit", QuitToMenu);
-        Wire("Button_PauseBack", () => ShowPage(Page.Pause));
+        Wire("Button_PauseBack", () =>
+        {
+            GameAudio.Play(AudioEvent.UiBack);
+            ShowPage(Page.Pause);
+        }, false);
 
         BindSwitch("Row_Sound", () => !GameAudio.MuteSound, on => GameAudio.MuteSound = !on);
         BindSwitch("Row_Music", () => !GameAudio.MuteMusic, on => GameAudio.MuteMusic = !on);
@@ -639,6 +644,9 @@ public partial class MainMenu : MonoBehaviour
 
     void Back()
     {
+        // dźwięk cofnięcia gra przy przycisku Wstecz i przy klawiszu Escape (przycisk Wstecz telefonu)
+        GameAudio.Play(AudioEvent.UiBack);
+
         switch (current)
         {
             case Page.Bots:

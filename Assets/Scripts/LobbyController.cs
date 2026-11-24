@@ -347,8 +347,9 @@ public class LobbyController : MonoBehaviour
             return;
         }
 
-        // poprzedni host wyszedł i usługa wybrała mnie na nowego hosta
-        if (OnlineSession.IsHost && !LobbyState.IsHost)
+        // poprzedni host wyszedł i usługa wybrała mnie na nowego hosta (tylko gdy poczekalnia nadal trwa: po START i WYJDŹ
+        // LobbyState.End() zeruje flagi, a bez tego warunku stara poczekalnia wracałaby do trybu poczekalni w środku rundy)
+        if (LobbyState.InLobby && OnlineSession.IsHost && !LobbyState.IsHost)
         {
             BecomeHost();
             return;
