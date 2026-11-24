@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{34a24457-b1df-47c0-b433-7a1f144b3b00}">
+		<property name="assetPath">
+			<value>buffs/buff_Shield.mp3</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>1.056</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{981d5bac-ad2f-49b9-94be-26c8a94c551a}</destination>
+		</relationship>
+	</object>
+</objects>

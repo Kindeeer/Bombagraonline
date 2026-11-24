@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="EncodableAsset" id="{821e0d3b-12e4-4a5f-bb06-1c728284e520}">
+		<property name="color">
+			<value>Cyan Light 2</value>
+		</property>
+		<property name="assetPath">
+			<value>amb/</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{981d5bac-ad2f-49b9-94be-26c8a94c551a}</destination>
+		</relationship>
+	</object>
+</objects>

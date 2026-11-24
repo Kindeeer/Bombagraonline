@@ -621,7 +621,10 @@ PlayerSettings:
   webWasm2023: 0
   webEnableSubmoduleStrippingCompatibility: 0
   webProgressiveAssetLoading: 0
-  scriptingDefineSymbols: {}
+  scriptingDefineSymbols:
+    Android: FMOD_PRESENT
+    Standalone: FMOD_PRESENT
+    iPhone: FMOD_PRESENT
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

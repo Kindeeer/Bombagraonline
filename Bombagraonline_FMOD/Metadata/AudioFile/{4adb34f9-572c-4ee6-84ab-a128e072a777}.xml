@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{4adb34f9-572c-4ee6-84ab-a128e072a777}">
+		<property name="assetPath">
+			<value>map/map_FountainIdle.mp3</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>9.6391836734693879</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{981d5bac-ad2f-49b9-94be-26c8a94c551a}</destination>
+		</relationship>
+	</object>
+</objects>
