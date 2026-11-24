@@ -42,7 +42,11 @@ public enum AudioEvent
     CurseHit,
     ResultsShow,
     LevelUp,
-    MissionClaim
+    MissionClaim,
+    EmoteAngry,
+    EmoteLaugh,
+    EmoteCry,
+    EmoteLike
 }
 
 public enum MusicTrack
@@ -112,7 +116,12 @@ public static class GameAudio
         { AudioEvent.MatchWin, AudioEvent.RoundWin },
         { AudioEvent.MinePlace, AudioEvent.BombPlace },
         { AudioEvent.MineExplode, AudioEvent.BombExplode },
-        { AudioEvent.MissionClaim, AudioEvent.CoinGain }
+        { AudioEvent.MissionClaim, AudioEvent.CoinGain },
+        // emotki bez własnego dźwięku grają wspólny Emote
+        { AudioEvent.EmoteAngry, AudioEvent.Emote },
+        { AudioEvent.EmoteLaugh, AudioEvent.Emote },
+        { AudioEvent.EmoteCry, AudioEvent.Emote },
+        { AudioEvent.EmoteLike, AudioEvent.Emote }
     };
 
     static readonly Dictionary<MusicTrack, string> MusicPaths = new Dictionary<MusicTrack, string>

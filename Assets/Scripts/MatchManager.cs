@@ -97,6 +97,10 @@ public class MatchManager : MonoBehaviour
     public static bool ChaosActive { get; private set; }
 
     float roundClock;
+
+    // Tyle sekund po śmierci przedostatniej postaci czekamy na rozstrzygnięcie rundy (remis przy wzajemnym zabiciu).
+    const float SettleSeconds = 0.4f;
+    float decideAt = -1f;
     // czy ten telefon zaplanował już start następnej rundy (robi to host)
     bool restartScheduled;
     int nukeOwner = -1;
@@ -776,8 +780,27 @@ public class MatchManager : MonoBehaviour
         // tryb drużynowy: runda trwa, dopóki żyje ktoś z obu drużyn (wygrywa cała drużyna ostatniego żywego)
         int sidesAlive = Teams.Active && anyTeam ? (blueAlive ? 1 : 0) + (redAlive ? 1 : 0) : alive;
 
+        if (sidesAlive > 1)
+        {
+            decideAt = -1f;
+            return;
+        }
+
         if (sidesAlive <= 1)
         {
+            // Gdy zostaje jeden żywy (albo nikt), chwilę czekamy, zanim ogłosimy zwycięzcę: dwie postacie zabite tym samym
+            // wybuchem nie zawsze giną w tej samej klatce (a online wiadomość o śmierci drugiego gracza idzie z opóźnieniem).
+            // Jeśli w tym czasie zginie też ostatni żywy, jest remis i nikt nie dostaje punktu.
+            if (decideAt < 0f)
+            {
+                decideAt = Time.time + SettleSeconds;
+            }
+
+            if (Time.time < decideAt)
+            {
+                return;
+            }
+
             Combatant winner = last;
 
             // atomówka: kto ją zrzucił i zabił wszystkich, wygrywa nawet jeśli sam zginął

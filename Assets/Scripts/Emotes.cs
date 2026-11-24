@@ -39,8 +39,20 @@ public static class Emotes
     // Emotka do pokazania (moja albo odebrana z sieci): dymek przy karcie gracza i nad jego głową.
     public static void Show(int slot, Emote emote)
     {
-        GameAudio.Play(AudioEvent.Emote);
+        GameAudio.Play(SoundOf(emote));
         Sent?.Invoke(slot, emote);
+    }
+
+    // Dźwięk danej emotki (każda ma własny, a bez niego gra wspólny Emote).
+    public static AudioEvent SoundOf(Emote emote)
+    {
+        switch (emote)
+        {
+            case Emote.Angry: return AudioEvent.EmoteAngry;
+            case Emote.Laugh: return AudioEvent.EmoteLaugh;
+            case Emote.Cry: return AudioEvent.EmoteCry;
+            default: return AudioEvent.EmoteLike;
+        }
     }
 
     public static string Label(Emote emote)

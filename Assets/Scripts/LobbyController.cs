@@ -272,7 +272,7 @@ public class LobbyController : MonoBehaviour
             return;
         }
 
-        GameAudio.Play(AudioEvent.Emote);
+        GameAudio.Play(Emotes.SoundOf(emote));
         bubbles.ShowAbove(avatar.body.transform, 100 + (id.GetHashCode() & 0xFFFF), emote);
     }
 
