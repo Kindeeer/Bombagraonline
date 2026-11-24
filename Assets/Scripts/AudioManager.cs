@@ -83,6 +83,24 @@ public class AudioManager : MonoBehaviour
         }
     }
 
+    // FMOD liczy głośność i stereo dźwięków z pozycji na planszy względem "słuchacza" (FMOD Studio Listener). Dokładamy go z kodu
+    // do kamery areny, żeby nic nie trzeba było ustawiać w scenie. Słuchacz leży na płaszczyźnie planszy (z = 0), a nie za nią
+    // (kamera 2D stoi 10 jednostek dalej), bo inaczej każdy dźwięk byłby z góry "oddalony" o te 10 jednostek.
+    public static void AttachListener(Camera camera)
+    {
+#if FMOD_PRESENT
+        if (!Application.isPlaying || camera == null || camera.GetComponentInChildren<FMODUnity.StudioListener>() != null)
+        {
+            return;
+        }
+
+        GameObject listener = new GameObject("FMOD Listener");
+        listener.transform.SetParent(camera.transform, false);
+        listener.transform.position = new Vector3(camera.transform.position.x, camera.transform.position.y, 0f);
+        listener.AddComponent<FMODUnity.StudioListener>();
+#endif
+    }
+
     void Awake()
     {
         if (Instance != null && Instance != this)

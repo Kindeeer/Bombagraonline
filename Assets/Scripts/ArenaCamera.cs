@@ -110,6 +110,7 @@ public class ArenaCamera : MonoBehaviour
     {
         cam = GetComponent<Camera>();
         cam.orthographic = true;
+        AudioManager.AttachListener(cam);
         mode = startMode;
         rows = -1f;
         followBlend = mode == ViewMode.Whole ? 0f : 1f;
