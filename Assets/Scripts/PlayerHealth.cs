@@ -115,7 +115,11 @@ public class PlayerHealth : MonoBehaviour
     void Die()
     {
         isDead = true;
-        GameAudio.Play(AudioEvent.PlayerDeath, transform.position);
+        // moja postać: od razu Game Over (patrz MatchManager.PlayLocalDeathSound), cudze postacie i boty: zwykła śmierć
+        if (MatchManager.Instance == null || !MatchManager.Instance.PlayLocalDeathSound(this))
+        {
+            GameAudio.Play(AudioEvent.PlayerDeath, transform.position);
+        }
 
         // MatchManager przyznaje zabójstwo temu, kto podpalił pole
         if (MatchManager.Instance != null)

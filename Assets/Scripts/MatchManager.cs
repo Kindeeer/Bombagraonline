@@ -98,6 +98,9 @@ public class MatchManager : MonoBehaviour
 
     float roundClock;
 
+    // czy Game Over zagrał już przy mojej śmierci (wtedy na końcu rundy nie gra drugi raz)
+    bool gameOverPlayed;
+
     // Tyle sekund po śmierci przedostatniej postaci czekamy na rozstrzygnięcie rundy (remis przy wzajemnym zabiciu).
     const float SettleSeconds = 0.4f;
     float decideAt = -1f;
@@ -163,6 +166,20 @@ public class MatchManager : MonoBehaviour
     public static bool IsWinner(Combatant combatant, Combatant winner)
     {
         return winner != null && combatant != null && (combatant == winner || Teams.Allies(combatant, winner));
+    }
+
+    // Dźwięk śmierci mojej postaci: w grze każdy na każdego to od razu przegrana, więc gra Game Over (RoundLose), a nie zwykła
+    // śmierć. W drużynach moja drużyna może jeszcze wygrać, więc wtedy jak dotąd gra PlayerDeath. Zwraca true, gdy zagrał Game Over.
+    public bool PlayLocalDeathSound(PlayerHealth health)
+    {
+        if (Teams.Active || LobbyState.InLobby || Slots[0] == null || Slots[0].health != health)
+        {
+            return false;
+        }
+
+        gameOverPlayed = true;
+        GameAudio.Play(AudioEvent.RoundLose);
+        return true;
     }
 
     public static string NameOf(Combatant combatant)
@@ -241,6 +258,7 @@ public class MatchManager : MonoBehaviour
         ChaosActive = false;
         MatchOver = false;
         roundClock = 0f;
+        GameAudio.SetParameter(AudioManager.ChaosParameterName, 0f);
         Register(human, 0, false);
 
         bool online = OnlineMatch.Active;
@@ -816,6 +834,7 @@ public class MatchManager : MonoBehaviour
     void StartChaos()
     {
         ChaosActive = true;
+        GameAudio.SetParameter(AudioManager.ChaosParameterName, 1f);
         GameAudio.Play(AudioEvent.ChaosStart);
         StartCoroutine(ChaosBanner());
     }
@@ -864,7 +883,11 @@ public class MatchManager : MonoBehaviour
         AudioEvent endSound = winner == null ? AudioEvent.RoundDraw
             : IsWinner(Slots[0], winner) ? (MatchOver ? AudioEvent.MatchWin : AudioEvent.RoundWin)
             : AudioEvent.RoundLose;
-        GameAudio.Play(endSound);
+
+        if (!gameOverPlayed || endSound == AudioEvent.RoundWin || endSound == AudioEvent.MatchWin)
+        {
+            GameAudio.Play(endSound);
+        }
         banner = winner == null ? (scorePoint ? Loc.T("round.draw") : "")
             : teamWin ? Teams.NameOf(winner.team) + (MatchOver ? Loc.P(" WYGRYWAJĄ MECZ!", " WINS THE MATCH!") : Loc.P(" WYGRYWAJĄ RUNDĘ", " WINS THE ROUND"))
             : MatchOver ? NameOf(winner) + Loc.P(" WYGRYWA MECZ!", " WINS THE MATCH!")

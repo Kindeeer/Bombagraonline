@@ -103,6 +103,7 @@ public partial class MainMenu : MonoBehaviour
     {
         GameRules.Reset();
         MatchManager.ResetScores();
+        GameAudio.SetParameter(AudioManager.ChaosParameterName, 0f);
         LobbyState.End();
         OnlineMatch.SendLeave();
         OnlineMatch.End();
@@ -390,10 +391,11 @@ public partial class MainMenu : MonoBehaviour
             ShowPage(Page.Pause);
         }, false);
 
-        BindSwitch("Row_Sound", () => !GameAudio.MuteSound, on => GameAudio.MuteSound = !on);
-        BindSwitch("Row_Music", () => !GameAudio.MuteMusic, on => GameAudio.MuteMusic = !on);
-        BindSwitch("PauseRow_Sound", () => !GameAudio.MuteSound, on => GameAudio.MuteSound = !on);
-        BindSwitch("PauseRow_Music", () => !GameAudio.MuteMusic, on => GameAudio.MuteMusic = !on);
+        // głośność efektów i muzyki: suwaki w miejscu dawnych przełączników ON/OFF (0 = wyciszone)
+        BindVolume("Row_Sound", () => GameAudio.SfxVolumeShown, GameAudio.SetSfxVolume);
+        BindVolume("Row_Music", () => GameAudio.MusicVolumeShown, GameAudio.SetMusicVolume);
+        BindVolume("PauseRow_Sound", () => GameAudio.SfxVolumeShown, GameAudio.SetSfxVolume);
+        BindVolume("PauseRow_Music", () => GameAudio.MusicVolumeShown, GameAudio.SetMusicVolume);
     }
 
     // Podpina akcję pod wszystkie przyciski o danej nazwie (np. kilka przycisków Wstecz).
@@ -406,6 +408,34 @@ public partial class MainMenu : MonoBehaviour
                 WireClick(button, action, clickSound);
             }
         }
+    }
+
+    // Suwak głośności w wierszu ustawień: zajmuje miejsce przełącznika ON/OFF (ten jest chowany) i trochę miejsca na lewo od niego.
+    void BindVolume(string rowName, Func<float> get, Action<float> set)
+    {
+        Transform row = FindDeep(transform, rowName);
+        Transform track = row != null ? row.Find("Switch") : null;
+
+        if (track == null || row.Find("VolumeSlider") != null)
+        {
+            return;
+        }
+
+        RectTransform trackRect = (RectTransform)track;
+        track.gameObject.SetActive(false);
+
+        Slider slider = NewSlider(row, 0f, 1f, false, MenuBuilder.SwitchOnColor);
+        slider.name = "VolumeSlider";
+        RectTransform rect = (RectTransform)slider.transform;
+        rect.anchorMin = trackRect.anchorMin;
+        rect.anchorMax = trackRect.anchorMax;
+        rect.pivot = trackRect.pivot;
+        rect.offsetMin = trackRect.offsetMin + new Vector2(-340f, 22f);
+        rect.offsetMax = trackRect.offsetMax + new Vector2(0f, -22f);
+
+        slider.SetValueWithoutNotify(get());
+        slider.onValueChanged.AddListener(value => set(value));
+        settingsRefreshers.Add(() => slider.SetValueWithoutNotify(get()));
     }
 
     void BindSwitch(string rowName, Func<bool> isOn, Action<bool> setOn)
@@ -692,6 +722,7 @@ public partial class MainMenu : MonoBehaviour
 
     void ShowPage(Page page)
     {
+        LeaveEditIfNeeded(page);
         current = page;
         CollapsePickers();
 
@@ -709,6 +740,9 @@ public partial class MainMenu : MonoBehaviour
         if (page == Page.Main)
         {
             RefreshProfileBadge();
+
+            // kropka "nowe" na SKINS, gdy czeka nieobejrzana chroma
+            SetNewDot(FindDeep(transform, "Button_Skins"), NewChromas.Any, 44f);
         }
         else if (page == Page.Profile)
         {
@@ -878,6 +912,7 @@ public partial class MainMenu : MonoBehaviour
             bool selected = Mathf.Clamp(SkinSelection.Index, 0, art.SkinCount - 1) == index;
             cardImage.color = selected ? new Color(0.62f, 0.92f, 0.62f, 1f) : normalColor;
             tag.text = selected ? Loc.T("skin.selected") : "";
+            SetNewDot(card.transform, NewChromas.AnyFor(skin.label), 40f);
         });
     }
 

@@ -60,6 +60,17 @@ public partial class MainMenu
     bool resultChosen;
     bool equipAfterOpen;
 
+    // skrzynka po zakupie czeka na dotknięcie, zanim się otworzy
+    bool chestTapped;
+    TextMeshProUGUI chestTapHint;
+
+    // EDIT: chroma, do której przewinąć listę po wejściu (int.MinValue = żadna), i zwierzak, którego kropki "nowe" znikną po wyjściu
+    int editFocusChroma = int.MinValue;
+    string editShownSkin;
+
+    // tytuł skrzynki ma jeden rozmiar dla wszystkich skrzynek (liczony dla najdłuższej nazwy, od nowa po zmianie języka)
+    int chestTitleFitVersion = -1;
+
     TextMeshProUGUI shopCoinText;
     TextMeshProUGUI collectionText;
     TextMeshProUGUI chancesText;
@@ -430,6 +441,7 @@ public partial class MainMenu
         }
 
         System.Text.StringBuilder text = new System.Text.StringBuilder(chest.Info + "\n");
+        int[] tenths = RoundToTenths(weights, total);
 
         foreach (ChromaRarity rarity in order)
         {
@@ -438,13 +450,126 @@ public partial class MainMenu
                 continue;
             }
 
-            float percent = 100f * weights[(int)rarity] / total;
+            float percent = tenths[(int)rarity] / 10f;
             string hex = ColorUtility.ToHtmlStringRGB(SkinChroma.RarityColor(rarity) * 0.78f);
             text.Append("\n<b><color=#").Append(hex).Append('>').Append(SkinChroma.RarityName(rarity)).Append("</color></b>  ")
-                .Append(percent >= 10f ? Mathf.RoundToInt(percent).ToString() : percent.ToString("0.#")).Append('%');
+                .Append(percent.ToString("0.#")).Append('%');
         }
 
         return text.ToString();
+    }
+
+    // Szanse w dziesiątych częściach procenta, zaokrąglone tak, żeby razem dawały dokładnie 100% (metoda największych reszt).
+    // Zwykłe zaokrąglanie każdej szansy osobno potrafiło dać np. 100,7%.
+    static int[] RoundToTenths(float[] weights, float total)
+    {
+        int[] result = new int[weights.Length];
+
+        if (total <= 0f)
+        {
+            return result;
+        }
+
+        float[] remainders = new float[weights.Length];
+        int sum = 0;
+
+        for (int i = 0; i < weights.Length; i++)
+        {
+            float exact = 1000f * weights[i] / total;
+            result[i] = Mathf.FloorToInt(exact);
+            remainders[i] = weights[i] > 0f ? exact - result[i] : -1f;
+            sum += result[i];
+        }
+
+        for (int left = 1000 - sum; left > 0; left--)
+        {
+            int best = 0;
+
+            for (int i = 1; i < weights.Length; i++)
+            {
+                if (remainders[i] > remainders[best])
+                {
+                    best = i;
+                }
+            }
+
+            if (remainders[best] < 0f)
+            {
+                break;
+            }
+
+            result[best]++;
+            remainders[best] = -1f;
+        }
+
+        return result;
+    }
+
+    // Jeden rozmiar tytułu dla wszystkich skrzynek: najmniejszy z tych, które dobrałby autosize dla każdej nazwy osobno.
+    // Wcześniej każda nazwa dostawała własny rozmiar, więc np. "CUKIERKOWA" była mniejsza od pozostałych.
+    void FitChestTitle()
+    {
+        if (chestTitleText == null || chestTitleFitVersion == Loc.Version || chestTitleText.rectTransform.rect.width <= 1f
+            || !chestTitleText.gameObject.activeInHierarchy)
+        {
+            return;
+        }
+
+        chestTitleText.enableAutoSizing = true;
+        float smallest = chestTitleText.fontSizeMax;
+
+        foreach (ChestType chest in Chests.All)
+        {
+            chestTitleText.text = Loc.P("SKRZYNKA ", "CHEST ") + chest.Name;
+            chestTitleText.ForceMeshUpdate();
+            smallest = Mathf.Min(smallest, chestTitleText.fontSize);
+        }
+
+        chestTitleText.enableAutoSizing = false;
+        chestTitleText.fontSize = Mathf.Max(chestTitleText.fontSizeMin, smallest);
+        chestTitleFitVersion = Loc.Version;
+    }
+
+    // Czerwona kropka "nowe" w prawym górnym rogu obiektu (karta, przycisk). on = false chowa ją.
+    static void SetNewDot(Transform target, bool on, float size = 34f)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        Transform existing = target.Find("NewDot");
+
+        if (!on)
+        {
+            if (existing != null)
+            {
+                existing.gameObject.SetActive(false);
+            }
+
+            return;
+        }
+
+        if (existing == null)
+        {
+            Image ring = NewImage("NewDot", target, Color.white, false);
+            ring.sprite = CircleSprite();
+            ring.raycastTarget = false;
+            RectTransform rect = ring.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(size, size);
+            rect.anchoredPosition = new Vector2(-size * 0.55f, -size * 0.55f);
+
+            Image fill = NewImage("Fill", ring.transform, new Color(0.92f, 0.18f, 0.18f, 1f), false);
+            fill.sprite = CircleSprite();
+            fill.raycastTarget = false;
+            Stretch(fill.rectTransform, size * 0.12f);
+            existing = ring.transform;
+        }
+
+        existing.gameObject.SetActive(true);
+        existing.SetAsLastSibling();
     }
 
     void CreateChestArrow(RectTransform page, string objectName, string text, float x, int direction)
@@ -554,6 +679,7 @@ public partial class MainMenu
 
         if (chestTitleText != null)
         {
+            FitChestTitle();
             chestTitleText.text = Loc.P("SKRZYNKA ", "CHEST ") + chest.Name;
         }
 
@@ -628,6 +754,7 @@ public partial class MainMenu
 
         // wygrana jest zapisana od razu, więc nic nie przepada, nawet jeśli ktoś zamknie grę w trakcie animacji
         PlayerWallet.Unlock(art.players[skinIndex].label, chromaIndex);
+        NewChromas.Mark(art.players[skinIndex].label, chromaIndex);
         GameAudio.Play(AudioEvent.ShopBuy);
         RefreshShop();
         StartCoroutine(OpenChestRoutine(skinIndex, chromaIndex, chest));
@@ -688,6 +815,65 @@ public partial class MainMenu
         {
             AddEditCard(skin, c, equipped == c, PlayerWallet.Owns(skin.label, c));
         }
+
+        // kropki "nowe" tego zwierzaka widać do wyjścia z EDIT (wtedy znikają, patrz ShowPage)
+        editShownSkin = skin.label;
+
+        if (editFocusChroma != int.MinValue)
+        {
+            StartCoroutine(ScrollEditTo(editFocusChroma < 0 ? "Card_Default" : "Card_" + editFocusChroma));
+            editFocusChroma = int.MinValue;
+        }
+    }
+
+    // Wywoływane przy każdej zmianie ekranu: po wyjściu z EDIT nowe chromy obejrzanego zwierzaka przestają być "nowe".
+    void LeaveEditIfNeeded(Page next)
+    {
+        if (next != Page.Edit && editShownSkin != null)
+        {
+            NewChromas.ClearSkin(editShownSkin);
+            editShownSkin = null;
+        }
+    }
+
+    // Widoczny pasek przewijania po prawej stronie listy chrom: od razu widać, że lista jest dłuższa i gdzie się jest.
+    static void EnsureEditScrollbar(RectTransform chromas)
+    {
+        ScrollRect scroll = chromas != null ? chromas.GetComponent<ScrollRect>() : null;
+
+        if (scroll == null || scroll.verticalScrollbar != null)
+        {
+            return;
+        }
+
+        GameObject barObject = new GameObject("Scrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
+        RectTransform bar = (RectTransform)barObject.transform;
+        bar.SetParent(chromas, false);
+        bar.anchorMin = new Vector2(1f, 0f);
+        bar.anchorMax = new Vector2(1f, 1f);
+        bar.pivot = new Vector2(0f, 0.5f);
+        bar.offsetMin = new Vector2(10f, 8f);
+        bar.offsetMax = new Vector2(34f, -8f);
+
+        Image track = barObject.GetComponent<Image>();
+        track.sprite = RoundedSprite();
+        track.type = Image.Type.Sliced;
+        track.color = new Color(0f, 0f, 0f, 0.28f);
+
+        RectTransform area = NewRect("SlidingArea", bar);
+        Stretch(area, 3f);
+
+        Image handle = NewImage("Handle", area, MenuBuilder.CardColor);
+        handle.rectTransform.offsetMin = handle.rectTransform.offsetMax = Vector2.zero;
+
+        Scrollbar scrollbar = barObject.GetComponent<Scrollbar>();
+        scrollbar.handleRect = handle.rectTransform;
+        scrollbar.targetGraphic = handle;
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+        scrollbar.navigation = new Navigation { mode = Navigation.Mode.None };
+
+        scroll.verticalScrollbar = scrollbar;
+        scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
     }
 
     // Chromy jest dużo, więc zamiast jednego rzędu jest przewijana siatka 5 kolumn. Zwraca obiekt, do którego trafiają karty.
@@ -697,6 +883,7 @@ public partial class MainMenu
 
         if (existing != null)
         {
+            EnsureEditScrollbar(chromas);
             return (RectTransform)existing;
         }
 
@@ -746,6 +933,7 @@ public partial class MainMenu
 
         scroll.viewport = viewport;
         scroll.content = content;
+        EnsureEditScrollbar(chromas);
         return content;
     }
 
@@ -843,6 +1031,11 @@ public partial class MainMenu
             padlock.preserveAspect = true;
             padlock.raycastTarget = false;
             Anchor(padlock.rectTransform, 0.28f, 0.47f, 0.72f, 0.85f);
+        }
+
+        if (!isDefault && owned && NewChromas.IsNew(skin.label, chroma))
+        {
+            SetNewDot(card.transform, true, 30f);
         }
 
         string title = isDefault ? Loc.T("edit.default") : Loc.ChromaName(list[chroma]);
@@ -1185,6 +1378,26 @@ public partial class MainMenu
             ov.chest.root.localScale = Vector3.one * EaseOutBack(u);
         });
 
+        // 1b. skrzynka czeka, aż gracz jej dotknie (sam zdecyduje, kiedy ją otworzyć)
+        EnsureChestTap();
+        chestTapped = false;
+        chestTapHint.text = Loc.P("DOTKNIJ, ABY OTWORZYĆ", "TAP TO OPEN");
+        chestTapHint.gameObject.SetActive(true);
+        float waited = 0f;
+
+        while (!chestTapped)
+        {
+            waited += Time.unscaledDeltaTime;
+            ov.chest.root.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(waited * 2.2f) * 3f);
+            ov.chest.root.localScale = Vector3.one * (1f + Mathf.Sin(waited * 3.1f) * 0.025f);
+            chestTapHint.alpha = 0.6f + 0.4f * Mathf.Sin(waited * 4f);
+            yield return null;
+        }
+
+        chestTapHint.gameObject.SetActive(false);
+        ov.chest.root.localRotation = Quaternion.identity;
+        ov.chest.root.localScale = Vector3.one;
+
         // 2. trzęsie się coraz mocniej, w środku robi się jasno
         GameAudio.Play(AudioEvent.ChestShake);
         float time = 0f;
@@ -1278,6 +1491,75 @@ public partial class MainMenu
         ClearParticles();
         chestBusy = false;
         RefreshShop();
+
+        // ZAŁÓŻ: od razu edycja tego zwierzaka, z listą przewiniętą do nowej chromy
+        if (equipAfterOpen)
+        {
+            editFocusChroma = chromaIndex;
+            ShowPage(Page.Edit);
+        }
+    }
+
+    // Niewidzialny przycisk na całej nakładce skrzynki (łapie dotknięcie) i napis z podpowiedzią. Tworzone raz, z kodu,
+    // także wtedy, gdy nakładka jest zapisana w scenie.
+    void EnsureChestTap()
+    {
+        if (chestTapHint != null)
+        {
+            return;
+        }
+
+        Button tap = overlay.root.GetComponent<Button>();
+
+        if (tap == null)
+        {
+            tap = overlay.root.gameObject.AddComponent<Button>();
+            tap.transition = Selectable.Transition.None;
+            tap.navigation = new Navigation { mode = Navigation.Mode.None };
+            tap.targetGraphic = overlay.dim;
+        }
+
+        tap.onClick.AddListener(() => chestTapped = true);
+
+        chestTapHint = NewText(overlay.root, "", 56f, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+        chestTapHint.name = "TapHint";
+        chestTapHint.raycastTarget = false;
+        chestTapHint.outlineWidth = 0.25f;
+        chestTapHint.outlineColor = new Color32(30, 15, 25, 255);
+        RectTransform rect = chestTapHint.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(1400f, 100f);
+        rect.anchoredPosition = new Vector2(0f, -330f);
+        chestTapHint.gameObject.SetActive(false);
+    }
+
+    // Przewija listę chrom w EDIT tak, żeby karta o tej nazwie była na środku (po zbudowaniu siatki, więc klatkę później).
+    IEnumerator ScrollEditTo(string cardName)
+    {
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+
+        ScrollRect scroll = editRow != null ? editRow.GetComponentInParent<ScrollRect>() : null;
+        RectTransform card = editRow != null ? editRow.Find(cardName) as RectTransform : null;
+
+        if (scroll == null || card == null)
+        {
+            yield break;
+        }
+
+        RectTransform viewport = scroll.viewport != null ? scroll.viewport : (RectTransform)scroll.transform;
+        float contentHeight = editRow.rect.height;
+        float viewHeight = viewport.rect.height;
+
+        if (contentHeight <= viewHeight)
+        {
+            yield break;
+        }
+
+        float center = -card.anchoredPosition.y;
+        float top = Mathf.Clamp(center - viewHeight * 0.5f, 0f, contentHeight - viewHeight);
+        scroll.verticalNormalizedPosition = 1f - top / (contentHeight - viewHeight);
     }
 
     static AudioEvent RevealEvent(ChromaRarity rarity)

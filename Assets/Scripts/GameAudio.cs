@@ -181,6 +181,11 @@ public static class GameAudio
 
     const string MuteSoundKey = "mute_sound";
     const string MuteMusicKey = "mute_music";
+    const string SfxVolumeKey = "volume_sfx";
+    const string MusicVolumeKey = "volume_music";
+
+    static float sfxVolume = -1f;
+    static float musicVolume = -1f;
 
     static int muteSound = -1;
     static int muteMusic = -1;
@@ -197,6 +202,8 @@ public static class GameAudio
     {
         muteSound = -1;
         muteMusic = -1;
+        sfxVolume = -1f;
+        musicVolume = -1f;
         mutesApplied = false;
         currentMusic = MusicTrack.None;
         LogEvents = false;
@@ -243,6 +250,73 @@ public static class GameAudio
         {
             muteMusic = value ? 1 : 0;
             PlayerPrefs.SetInt(MuteMusicKey, muteMusic);
+            mutesApplied = false;
+            ApplyMutes();
+        }
+    }
+
+    // ---------- Głośność (suwaki w ustawieniach, 0-1) ----------
+
+    public static float SfxVolume
+    {
+        get
+        {
+            if (sfxVolume < 0f)
+            {
+                sfxVolume = PlayerPrefs.GetFloat(SfxVolumeKey, 1f);
+            }
+
+            return sfxVolume;
+        }
+    }
+
+    public static float MusicVolume
+    {
+        get
+        {
+            if (musicVolume < 0f)
+            {
+                musicVolume = PlayerPrefs.GetFloat(MusicVolumeKey, 1f);
+            }
+
+            return musicVolume;
+        }
+    }
+
+    // Co pokazuje suwak: wyciszenie (dawny przełącznik OFF) to 0.
+    public static float SfxVolumeShown => MuteSound ? 0f : SfxVolume;
+    public static float MusicVolumeShown => MuteMusic ? 0f : MusicVolume;
+
+    // Suwak efektów. Zero wycisza efekty (gra wtedy w ogóle ich nie odpala), więcej je włącza z daną głośnością.
+    public static void SetSfxVolume(float value)
+    {
+        sfxVolume = Mathf.Clamp01(value);
+        PlayerPrefs.SetFloat(SfxVolumeKey, sfxVolume);
+        bool mute = sfxVolume <= 0.001f;
+
+        if (mute != MuteSound)
+        {
+            MuteSound = mute;
+        }
+        else
+        {
+            mutesApplied = false;
+            ApplyMutes();
+        }
+    }
+
+    public static void SetMusicVolume(float value)
+    {
+        musicVolume = Mathf.Clamp01(value);
+        PlayerPrefs.SetFloat(MusicVolumeKey, musicVolume);
+        bool mute = musicVolume <= 0.001f;
+
+        if (mute != MuteMusic)
+        {
+            MuteMusic = mute;
+        }
+        else
+        {
             mutesApplied = false;
             ApplyMutes();
         }
@@ -544,14 +618,52 @@ public static class GameAudio
             {
                 return;
             }
-
-            FMODUnity.RuntimeManager.GetBus(SfxBus).setMute(MuteSound);
-            FMODUnity.RuntimeManager.GetBus(MusicBus).setMute(MuteMusic);
-            mutesApplied = true;
         }
         catch (System.Exception exception)
         {
-            WarnOnce("magistrale " + SfxBus + " / " + MusicBus, exception);
+            WarnOnce("banki", exception);
+            return;
+        }
+
+        mutesApplied = true;
+        SetBusMute(SfxBus, MuteSound);
+        SetBusMute(MusicBus, MuteMusic);
+        SetVolume(AudioManager.SfxVcaPath, SfxBus, SfxVolume);
+        SetVolume(AudioManager.MusicVcaPath, MusicBus, MusicVolume);
+    }
+
+    static void SetBusMute(string bus, bool mute)
+    {
+        try
+        {
+            FMODUnity.RuntimeManager.GetBus(bus).setMute(mute);
+        }
+        catch (System.Exception exception)
+        {
+            WarnOnce("magistrala " + bus, exception);
+        }
+    }
+
+    // Głośność przez VCA dźwiękowca, a gdy takiego VCA nie ma w bankach, przez magistralę.
+    static void SetVolume(string vca, string bus, float volume)
+    {
+        try
+        {
+            FMODUnity.RuntimeManager.GetVCA(vca).setVolume(volume);
+            return;
+        }
+        catch (System.Exception)
+        {
+            // brak VCA: niżej próbujemy magistrali
+        }
+
+        try
+        {
+            FMODUnity.RuntimeManager.GetBus(bus).setVolume(volume);
+        }
+        catch (System.Exception exception)
+        {
+            WarnOnce("głośność " + vca + " / " + bus, exception);
         }
     }
 

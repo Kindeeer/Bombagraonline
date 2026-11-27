@@ -53,6 +53,19 @@ public class AudioManager : MonoBehaviour
         "Pusty = zagra wspólny PickupCollect.")]
     public List<PickupSoundEntry> pickups = new List<PickupSoundEntry>();
 
+    [Header("Ustawienia FMOD")]
+    [Tooltip("VCA sterowane suwakiem Efekty w ustawieniach. Gdy go nie ma w bankach, suwak steruje magistralą bus:/SFX.")]
+    public string sfxVca = "vca:/SFX";
+    [Tooltip("VCA sterowane suwakiem Muzyka w ustawieniach. Gdy go nie ma w bankach, suwak steruje magistralą bus:/Music.")]
+    public string musicVca = "vca:/Music";
+    [Tooltip("Globalny parametr FMOD: 1, gdy zaczyna się CHAOS (DOUBLE BUFFS), 0 na starcie każdej rundy i w menu. " +
+        "Można nim np. przyspieszyć muzykę.")]
+    public string chaosParameter = "Chaos";
+
+    public static string SfxVcaPath => Instance != null && !string.IsNullOrEmpty(Instance.sfxVca) ? Instance.sfxVca : "vca:/SFX";
+    public static string MusicVcaPath => Instance != null && !string.IsNullOrEmpty(Instance.musicVca) ? Instance.musicVca : "vca:/Music";
+    public static string ChaosParameterName => Instance != null && !string.IsNullOrEmpty(Instance.chaosParameter) ? Instance.chaosParameter : "Chaos";
+
 #if FMOD_PRESENT
     readonly Dictionary<AudioEvent, FMODUnity.EventReference> effectLookup = new Dictionary<AudioEvent, FMODUnity.EventReference>();
     readonly Dictionary<MusicTrack, FMODUnity.EventReference> musicLookup = new Dictionary<MusicTrack, FMODUnity.EventReference>();

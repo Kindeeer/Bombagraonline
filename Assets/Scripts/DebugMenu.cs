@@ -294,6 +294,7 @@ public class DebugMenu : MonoBehaviour
         BuildStatsPage(AddPage("Statystyki", sidebar.transform, contentArea));
         BuildRoundPage(AddPage("Runda", sidebar.transform, contentArea));
         BuildCameraPage(AddPage("Kamera i czas", sidebar.transform, contentArea));
+        BuildAudioPage(AddPage("Dźwięki", sidebar.transform, contentArea));
 
         TextMeshProUGUI hint = NewText(sidebar.transform, "F1 zamyka menu", 26f, MutedText, TextAlignmentOptions.Center);
         hint.gameObject.AddComponent<LayoutElement>().preferredHeight = 50f;
@@ -366,6 +367,72 @@ public class DebugMenu : MonoBehaviour
     }
 
     // ---------- Strony ----------
+
+    // Odsłuch każdego zdarzenia dźwiękowego, muzyki i dźwięków przedmiotów bez szukania ich w grze (dla dźwiękowca).
+    // Gra to, co jest podpięte w AudioManagerze (albo dźwięk zapasowy), dokładnie tak jak w grze.
+    void BuildAudioPage(Page page)
+    {
+        foreach (MusicTrack track in Enum.GetValues(typeof(MusicTrack)))
+        {
+            MusicTrack chosen = track;
+            string title = track == MusicTrack.None ? "Muzyka: wyłącz" : "Muzyka: " + track;
+            AddActionRow(page, title, "Przełącza muzykę (jak w menu i w grze).", "GRAJ", GreenColor, () => GameAudio.PlayMusic(chosen));
+        }
+
+        foreach (AudioEvent audioEvent in Enum.GetValues(typeof(AudioEvent)))
+        {
+            AudioEvent chosen = audioEvent;
+            string path = GameAudio.PathOf(audioEvent);
+
+            // dźwięk w pętli gra kilka sekund i cichnie (inaczej grałby bez końca)
+            if (audioEvent == AudioEvent.FountainIdle)
+            {
+                AddActionRow(page, audioEvent.ToString(), "Pętla w tle: gra 4 sekundy i cichnie.", "GRAJ", BlueColor,
+                    () => StartCoroutine(PlayLoopFor(chosen, 4f)));
+                continue;
+            }
+
+            AddActionRow(page, audioEvent.ToString(), path.Length > 0 ? path : "Tylko z AudioManagera (albo dźwięk zapasowy).", "GRAJ", BlueColor,
+                () => GameAudio.Play(chosen));
+        }
+
+        PickupTable table = Resources.Load<PickupTable>(PickupTable.ResourcePath);
+
+        if (table == null)
+        {
+            return;
+        }
+
+        foreach (PickupDefinition item in table.items)
+        {
+            if (item == null)
+            {
+                continue;
+            }
+
+            PickupDefinition chosen = item;
+            AddActionRow(page, "Przedmiot: " + item.name, "Dźwięk zebrania (pole \"zebranie\" w AudioManagerze).", "ZEBRANIE", GrayColor,
+                () => GameAudio.PlayPickupCollect(chosen, Vector3.zero));
+
+            // dźwięk użycia mają przedmioty specjalne i buffy na następną bombę
+            if (item.special != SpecialItem.None || item.mode == PickupMode.NextBomb)
+            {
+                AddActionRow(page, "Przedmiot: " + item.name, "Dźwięk użycia (pole \"użycie\").", "UŻYCIE", GrayColor,
+                    () => GameAudio.PlayPickupUse(chosen, Vector3.zero));
+            }
+        }
+    }
+
+    System.Collections.IEnumerator PlayLoopFor(AudioEvent audioEvent, float seconds)
+    {
+        AudioLoop loop = GameAudio.StartLoop(audioEvent, Vector3.zero);
+        yield return new WaitForSecondsRealtime(seconds);
+
+        if (loop != null)
+        {
+            loop.Stop();
+        }
+    }
 
     void BuildCheatsPage(Page page)
     {
