@@ -56,6 +56,9 @@ public enum AudioEvent
     CameraZoomOut,
     KillCoin,
     PlayClick,
+    // przewijanie listy palcem: początek i puszczenie (patrz ScrollSounds)
+    ScrollStart,
+    ScrollEnd,
     // dźwięk w tle w pętli (fontanna): startuje i kończy go kod przez GameAudio.StartLoop
     FountainIdle
 }
@@ -164,7 +167,10 @@ public static class GameAudio
         { AudioEvent.SodaBreak, AudioEvent.BlockBreak },
         { AudioEvent.KillCoin, AudioEvent.CoinGain },
         // przycisk PLAY w menu głównym gra zwykły klik, dopóki nie ma własnego dźwięku
-        { AudioEvent.PlayClick, AudioEvent.UiClick }
+        { AudioEvent.PlayClick, AudioEvent.UiClick },
+        // przewijanie list gra zwykły klik, dopóki nie ma własnych dźwięków
+        { AudioEvent.ScrollStart, AudioEvent.UiClick },
+        { AudioEvent.ScrollEnd, AudioEvent.UiClick }
     };
 
     static readonly Dictionary<MusicTrack, string> MusicPaths = new Dictionary<MusicTrack, string>

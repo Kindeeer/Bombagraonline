@@ -319,6 +319,7 @@ public partial class MainMenu
         Anchor(scrollRect, 0.04f, 0.19f, 0.96f, 0.75f);
 
         ScrollRect scroll = scrollRect.gameObject.AddComponent<ScrollRect>();
+        ScrollSounds.Attach(scroll);
         scroll.horizontal = false;
         scroll.vertical = true;
         scroll.movementType = ScrollRect.MovementType.Clamped;

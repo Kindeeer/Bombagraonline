@@ -782,6 +782,7 @@ public class LobbyController : MonoBehaviour
         Anchor(scrollRoot, 0.03f, 0.15f, 0.97f, 0.915f);
 
         ScrollRect scroll = scrollRoot.gameObject.AddComponent<ScrollRect>();
+        ScrollSounds.Attach(scroll);
         scroll.horizontal = false;
         scroll.vertical = true;
         scroll.movementType = ScrollRect.MovementType.Clamped;

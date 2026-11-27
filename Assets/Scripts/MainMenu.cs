@@ -380,6 +380,9 @@ public partial class MainMenu : MonoBehaviour
         // pauza
         Wire("Button_Resume", ClosePause);
         Wire("Button_PauseSettings", () => ShowPage(Page.PauseSettings));
+
+        // dźwięk przewijania na listach zbudowanych w scenie (np. skiny)
+        ScrollSounds.AttachAll(transform);
         Wire("Button_Quit", QuitToMenu);
         Wire("Button_PauseBack", () =>
         {

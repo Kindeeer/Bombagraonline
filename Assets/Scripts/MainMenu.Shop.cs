@@ -714,6 +714,8 @@ public partial class MainMenu
             scroll = chromas.gameObject.AddComponent<ScrollRect>();
         }
 
+        ScrollSounds.Attach(scroll);
+
         scroll.horizontal = false;
         scroll.vertical = true;
         scroll.movementType = ScrollRect.MovementType.Clamped;
