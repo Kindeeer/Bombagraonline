@@ -434,6 +434,51 @@ public class DebugMenu : MonoBehaviour
         }
     }
 
+    // Wiersz z polem na liczbę monet: DODAJ dopisuje ją do konta, USTAW zmienia stan konta dokładnie na nią.
+    void AddCoinsInputRow(Page page)
+    {
+        RectTransform row = AddRow(page, "Monety: wpisz ilość",
+            "DODAJ dopisuje wpisaną liczbę, USTAW zmienia stan konta dokładnie na nią (np. 0, żeby wyzerować).", out _);
+
+        TMP_InputField field = NewInputField(row, "np. 2000", 36f, 9);
+        field.contentType = TMP_InputField.ContentType.IntegerNumber;
+        LayoutElement size = field.gameObject.AddComponent<LayoutElement>();
+        size.preferredWidth = 240f;
+        size.minWidth = 240f;
+
+        AddRowButton(row, "DODAJ", GreenColor, () =>
+        {
+            if (TryReadCoins(field, out int amount) && amount > 0)
+            {
+                PlayerWallet.AddCoins(amount);
+                GameAudio.Play(AudioEvent.CoinGain);
+            }
+        }, 170f);
+
+        AddRowButton(row, "USTAW", BlueColor, () =>
+        {
+            if (TryReadCoins(field, out int amount))
+            {
+                PlayerWallet.SetCoins(amount);
+                GameAudio.Play(AudioEvent.CoinGain);
+            }
+        }, 170f);
+    }
+
+    // Liczba z pola (puste albo niepoprawne = false). Zbyt duże liczby są przycinane do limitu monet.
+    static bool TryReadCoins(TMP_InputField field, out int amount)
+    {
+        amount = 0;
+
+        if (!long.TryParse(field.text, out long value))
+        {
+            return false;
+        }
+
+        amount = (int)System.Math.Max(0L, System.Math.Min(value, PlayerWallet.MaxCoins));
+        return true;
+    }
+
     void BuildCheatsPage(Page page)
     {
         AddToggleRow(page, "Noclip", "Chodzisz przez bloki, ściany i bomby (zostajesz w obrębie planszy).",
@@ -449,6 +494,7 @@ public class DebugMenu : MonoBehaviour
             PlayerWallet.AddCoins(500);
             GameAudio.Play(AudioEvent.CoinGain);
         });
+        AddCoinsInputRow(page);
         AddToggleRow(page, "Pauza przy otwartym menu", "Gra stoi, dopóki menu jest otwarte. Wyłącz, żeby oglądać efekty na żywo.",
             () => pauseWhenOpen, value => pauseWhenOpen = value);
     }

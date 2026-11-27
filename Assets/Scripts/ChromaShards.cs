@@ -3,8 +3,8 @@ using UnityEngine;
 
 // Odłamki chrom: epicka chroma wypada ze skrzynki w 2 odłamkach (1/2, 2/2), legendarna w 3 (1/3, 2/3, 3/3).
 // Chroma odblokowuje się dopiero po zebraniu wszystkich odłamków. Zwykła i rzadka wypadają w całości, jak dawniej.
-// Gdy skrzynka wylosuje epicką albo legendarną chromę, a gracz zbiera już odłamki jakiejś chromy tej rzadkości,
-// odłamek trafia do niej (tej z największą liczbą odłamków), żeby kolekcja szła do przodu, a nie rozsypywała się po wielu chromach.
+// Każdy odłamek losuje się od nowa spośród wszystkich brakujących chrom (tak jak cała chroma), więc kolejne odłamki
+// mogą trafiać do różnych chrom.
 // Zapisane na urządzeniu (PlayerPrefs), tak jak chromy.
 public static class ChromaShards
 {
@@ -82,32 +82,11 @@ public static class ChromaShards
         return count;
     }
 
-    // Chroma tej samej rzadkości, której odłamki gracz już zbiera (i którą ta skrzynka może dać). false, gdy żadnej nie zbiera.
-    public static bool FindStarted(GameArt art, ChestType chest, ChromaRarity rarity, out int skinIndex, out int chromaIndex)
+    // Usuwa wszystkie odłamki (zerowanie postępu na starcie Play w edytorze, patrz PlayerWallet).
+    public static void ResetAll()
     {
-        skinIndex = -1;
-        chromaIndex = -1;
-        int best = 0;
-
-        for (int skin = 0; skin < art.SkinCount; skin++)
-        {
-            SkinChroma[] chromas = art.players[skin].ChromaList;
-            string label = art.players[skin].label;
-
-            for (int c = 0; c < chromas.Length; c++)
-            {
-                int have = Get(label, c);
-
-                if (have > best && chromas[c].rarity == rarity && chest.Accepts(chromas[c]) && !PlayerWallet.Owns(label, c))
-                {
-                    best = have;
-                    skinIndex = skin;
-                    chromaIndex = c;
-                }
-            }
-        }
-
-        return skinIndex >= 0;
+        PlayerPrefs.DeleteKey(Key);
+        counts = null;
     }
 
     static void Save()

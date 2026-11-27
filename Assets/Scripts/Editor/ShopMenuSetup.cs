@@ -4,13 +4,14 @@ using UnityEngine;
 
 // Raz buduje w scenie strony SKRZYNKI i EDYCJA oraz przycisk CHESTS (zwykłe obiekty Canvas w MainMenuCanvas), żeby były widoczne
 // i edytowalne w Hierarchii jeszcze przed wciśnięciem Play. Gra szuka ich po nazwach, więc nazw nie zmieniaj.
-// Dodatkowo menu Bomb Game ma przełącznik: czy monety i chromy mają się zerować przy każdym Play w edytorze.
+// Dodatkowo menu Bomb Game ma przełącznik: czy dane gracza (postęp i ustawienia) mają się zerować przy każdym Play w edytorze.
+// Samo zerowanie robi Editor/ProgressKeeper.
 // Ten plik działa tylko w edytorze.
 public static class ShopMenuSetup
 {
     const string PrefKey = "BombaGra.ShopMenuBuilt.v1";
     const string GeneratedFolder = "Assets/Sprites/UI/Generated/";
-    const string KeepMenuPath = "Bomb Game/Zachowuj monety i chromy między uruchomieniami Play";
+    const string KeepMenuPath = "Bomb Game/Zachowaj dane gracza między uruchomieniami Play (postęp i ustawienia)";
 
     [InitializeOnLoadMethod]
     static void AutoRun()

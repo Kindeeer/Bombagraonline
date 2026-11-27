@@ -81,6 +81,19 @@ public static class UiKit
         TextAlignmentOptions alignment, FontStyles style = FontStyles.Normal)
     {
         TextMeshProUGUI label = NewRect("Text", parent).gameObject.AddComponent<TextMeshProUGUI>();
+
+        // Napis tworzony pod ukrytym obiektem nie dostaje czcionki od razu (TextMeshPro ustawia ją dopiero przy pierwszym włączeniu),
+        // a wtedy np. ustawienie obwódki rzuca wyjątek. Dlatego czcionkę i jej materiał ustawiamy od razu.
+        if (label.font == null)
+        {
+            label.font = TMP_Settings.defaultFontAsset;
+        }
+
+        if (label.fontSharedMaterial == null && label.font != null)
+        {
+            label.fontSharedMaterial = label.font.material;
+        }
+
         label.text = text;
         label.fontSize = size;
         label.color = color;

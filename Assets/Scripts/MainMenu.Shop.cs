@@ -761,15 +761,10 @@ public partial class MainMenu
             return;
         }
 
-        // epicka i legendarna wypadają w odłamkach: odłamek trafia do chromy, której odłamki gracz już zbiera (jeśli taka jest)
+        // epicka i legendarna wypadają w odłamkach: każdy odłamek losuje się od nowa spośród wszystkich brakujących chrom,
+        // więc kolejne odłamki mogą trafić do różnych chrom
         ChromaRarity rarity = art.players[skinIndex].ChromaList[chromaIndex].rarity;
         int needed = ChromaShards.Needed(rarity);
-
-        if (needed > 1 && ChromaShards.FindStarted(art, chest, rarity, out int startedSkin, out int startedChroma))
-        {
-            skinIndex = startedSkin;
-            chromaIndex = startedChroma;
-        }
 
         string label = art.players[skinIndex].label;
         int shards = needed > 1 ? ChromaShards.Add(label, chromaIndex, needed) : 1;
@@ -1031,11 +1026,20 @@ public partial class MainMenu
         button.transition = Selectable.Transition.None;
         AddButtonFx(button, card);
 
-        Image preview = NewImage("Preview", card.transform, owned ? Color.white : new Color(0.12f, 0.08f, 0.12f, 1f), false);
+        // chroma z odłamków (epicka, legendarna), której gracz jeszcze nie ma: puzzle i pasek postępu
+        int shardsNeeded = !isDefault && !owned ? ChromaShards.Needed(list[chroma].rarity) : 1;
+        int shardsCollected = shardsNeeded > 1 ? ChromaShards.Get(skin.label, chroma) : 0;
+
+        Image preview = NewImage("Preview", card.transform, owned ? Color.white : LockedPreviewColor, false);
         Anchor(preview.rectTransform, 0.06f, 0.34f, 0.94f, 0.97f);
-        preview.sprite = owned ? ChromaFront(skin, chroma) : ChromaFront(skin, -1);
+        preview.sprite = owned || shardsNeeded > 1 ? ChromaFront(skin, chroma) : ChromaFront(skin, -1);
         preview.preserveAspect = true;
         preview.raycastTarget = false;
+
+        if (shardsNeeded > 1)
+        {
+            ShowShardPuzzle(preview, preview.sprite, shardsCollected, shardsNeeded);
+        }
 
         // odblokowana chroma pokazuje na karcie swój wzór (ikonki zsuwające się po postaci)
         if (owned && !isDefault)
@@ -1043,8 +1047,8 @@ public partial class MainMenu
             ShowPattern(preview, list[chroma].Fx);
         }
 
-        // kłódka na zablokowanej chromie
-        if (!owned)
+        // kłódka na zablokowanej chromie (gdy są już odłamki, zamiast kłódki widać zebrane kawałki)
+        if (!owned && shardsCollected == 0)
         {
             Image lockShadow = NewImage("LockShadow", card.transform, new Color(0f, 0f, 0f, 0.55f), false);
             lockShadow.sprite = LockSprite();
@@ -1073,7 +1077,6 @@ public partial class MainMenu
 
         string state = equipped ? Loc.T("skin.selected") : owned ? "" : Loc.T("edit.locked");
         Color stateColor = equipped ? new Color(0.10f, 0.45f, 0.15f) : new Color(0.55f, 0.20f, 0.20f);
-        int shardsHave = !owned && !isDefault ? ChromaShards.Get(skin.label, chroma) : 0;
 
         if (!isDefault)
         {
@@ -1081,11 +1084,11 @@ public partial class MainMenu
             state = equipped || !owned ? state : rarityName;
             stateColor = equipped ? stateColor : owned ? SkinChroma.RarityColor(list[chroma].rarity) * 0.78f : stateColor;
 
-            // zablokowana chroma z zebranymi odłamkami pokazuje postęp zamiast "ZABLOKOWANY"
-            if (shardsHave > 0)
+            // chroma z odłamków pokazuje pasek postępu (także 0/3) zamiast "ZABLOKOWANY"
+            if (shardsNeeded > 1)
             {
-                state = Loc.P("ODŁAMKI ", "SHARDS ") + shardsHave + "/" + ChromaShards.Needed(list[chroma].rarity);
-                stateColor = SkinChroma.RarityColor(list[chroma].rarity) * 0.78f;
+                state = "";
+                AddShardBar(card.transform, shardsCollected, shardsNeeded, SkinChroma.RarityColor(list[chroma].rarity) * 0.85f);
             }
         }
 
@@ -1484,15 +1487,21 @@ public partial class MainMenu
             : Loc.P("ODŁAMEK ", "SHARD ") + shards + "/" + needed);
         ov.cardRarity.color = rarityColor * 0.75f;
 
-        // niekompletna chroma: postać przygaszona, bez efektu chromy, a na niej duży licznik odłamków
-        ov.cardPreview.color = complete ? Color.white : new Color(0.45f, 0.45f, 0.5f, 1f);
-        ShowShardBadge(ov.card, complete ? null : shards + "/" + needed, rarityColor);
+        // niekompletna chroma: ciemna sylwetka, a zebrane odłamki jako kolorowe kawałki puzzli (najnowszy pojawi się za chwilę)
+        ov.cardPreview.color = complete ? Color.white : LockedPreviewColor;
+        ov.card.gameObject.SetActive(true);
+        Image newestPiece = null;
 
         if (!complete)
         {
             ShowFx(ov.cardPreview, default);
+            newestPiece = ShowShardPuzzle(ov.cardPreview, ov.cardPreview.sprite, shards, needed);
+
+            if (newestPiece != null)
+            {
+                newestPiece.color = new Color(1f, 1f, 1f, 0f);
+            }
         }
-        ov.card.gameObject.SetActive(true);
 
         yield return Tween(0.75f, u =>
         {
@@ -1505,6 +1514,14 @@ public partial class MainMenu
         });
 
         SpawnBurst(rarityColor, 18 + rarityLevel * 10);
+
+        // nowy odłamek wskakuje na swoje miejsce w puzzlach
+        if (newestPiece != null)
+        {
+            yield return Tween(0.5f, u => newestPiece.color = new Color(1f, 1f, 1f, u));
+            SpawnBurst(rarityColor, 14);
+        }
+
         yield return new WaitForSecondsRealtime(0.4f);
 
         // 5. przyciski i czekanie na wybór (odłamka nie da się założyć, więc zostaje sam OK na środku)
@@ -1537,7 +1554,7 @@ public partial class MainMenu
 
         ShowFx(ov.cardPreview, default);
         ov.cardPreview.color = Color.white;
-        ShowShardBadge(ov.card, null, Color.white);
+        ShowShardPuzzle(ov.cardPreview, null, 0, 0);
         ov.root.gameObject.SetActive(false);
         ClearParticles();
         chestBusy = false;
@@ -1551,41 +1568,82 @@ public partial class MainMenu
         }
     }
 
-    // Duży licznik odłamków na karcie wyniku (np. "1/3"). text = null chowa go.
-    void ShowShardBadge(RectTransform card, string text, Color color)
+    // kolor ciemnej sylwetki zablokowanej chromy (EDIT i karta odłamka)
+    static readonly Color LockedPreviewColor = new Color(0.12f, 0.08f, 0.12f, 1f);
+
+    // Chroma z odłamków jak puzzle (styl ewolucji z Clash Royale): na ciemnej sylwetce w podglądzie zebrane kawałki są w kolorze,
+    // a między kawałkami widać jasne pęknięcia (tylko na postaci, nie na tle). art = grafika chromy w kolorze.
+    // Zwraca obrazek ostatniego zebranego kawałka (do animacji) albo null. needed <= 1 albo art == null usuwa puzzle.
+    static Image ShowShardPuzzle(Image preview, Sprite art, int have, int needed)
     {
-        Transform existing = card.Find("ShardBadge");
+        Transform old = preview.transform.Find("Shards");
 
-        if (text == null)
+        if (old != null)
         {
-            if (existing != null)
-            {
-                existing.gameObject.SetActive(false);
-            }
-
-            return;
+            old.name = "ShardsOld";
+            Destroy(old.gameObject);
         }
 
-        TextMeshProUGUI badge;
-
-        if (existing == null)
+        if (needed <= 1 || art == null)
         {
-            badge = NewText(card, "", 120f, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
-            badge.name = "ShardBadge";
-            badge.raycastTarget = false;
-            badge.outlineWidth = 0.3f;
-            Anchor(badge.rectTransform, 0.05f, 0.40f, 0.95f, 0.80f);
-        }
-        else
-        {
-            badge = existing.GetComponent<TextMeshProUGUI>();
+            return null;
         }
 
-        badge.text = text;
-        badge.color = Color.Lerp(color, Color.white, 0.35f);
-        badge.outlineColor = new Color32(40, 20, 35, 255);
-        badge.gameObject.SetActive(true);
-        badge.transform.SetAsLastSibling();
+        // wszystko poniżej rysuje się tylko w kształcie postaci
+        // NewImage tworzy obrazek 100 x 100 na środku, więc każdą warstwę rozciągamy na cały podgląd
+        Image outline = NewImage("Shards", preview.transform, Color.white, false);
+        Stretch(outline.rectTransform);
+        outline.sprite = preview.sprite;
+        outline.preserveAspect = true;
+        outline.raycastTarget = false;
+        outline.gameObject.AddComponent<Mask>().showMaskGraphic = false;
+
+        Image newest = null;
+
+        for (int i = 0; i < Mathf.Min(have, needed); i++)
+        {
+            Image piece = NewImage("Piece" + i, outline.transform, Color.white, false);
+            Stretch(piece.rectTransform);
+            piece.sprite = ShardArt.Piece(needed, i);
+            piece.raycastTarget = false;
+            piece.gameObject.AddComponent<Mask>().showMaskGraphic = false;
+
+            Image color = NewImage("Art", piece.transform, Color.white, false);
+            Stretch(color.rectTransform);
+            color.sprite = art;
+            color.preserveAspect = true;
+            color.raycastTarget = false;
+            newest = color;
+        }
+
+        Image cracks = NewImage("Cracks", outline.transform, new Color(1f, 0.97f, 1f, 0.9f), false);
+        Stretch(cracks.rectTransform);
+        cracks.sprite = ShardArt.Cracks(needed);
+        cracks.raycastTarget = false;
+        return newest;
+    }
+
+    // Pasek odłamków pod kartą chromy w EDIT (jak w Clash Royale): tyle kratek, ile odłamków trzeba, zebrane w kolorze rzadkości,
+    // a obok napis "2/3".
+    static void AddShardBar(Transform card, int have, int needed, Color color)
+    {
+        RectTransform bar = NewRect("ShardBar", card);
+        Anchor(bar, 0.08f, 0.055f, 0.66f, 0.165f);
+
+        float gap = 0.04f;
+        float width = (1f - gap * (needed - 1)) / needed;
+
+        for (int i = 0; i < needed; i++)
+        {
+            Image cell = NewImage("Cell" + i, bar, i < have ? color : new Color(0f, 0f, 0f, 0.22f));
+            cell.raycastTarget = false;
+            float x = i * (width + gap);
+            Anchor(cell.rectTransform, x, 0f, x + width, 1f);
+        }
+
+        TextMeshProUGUI count = NewText(card, have + "/" + needed, 30f, color, TextAlignmentOptions.Center, FontStyles.Bold);
+        count.name = "ShardCount";
+        Anchor(count.rectTransform, 0.66f, 0.03f, 0.97f, 0.19f);
     }
 
     // Przyciski pod kartą wyniku: ZAŁÓŻ i OK obok siebie, a przy odłamku sam OK na środku.

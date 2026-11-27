@@ -72,6 +72,22 @@ public static class DailyMissions
         loadedDay = 0;
     }
 
+    // Usuwa dzisiejsze misje z postępem i odebranymi nagrodami (przy następnym wejściu losują się od nowa).
+    public static void ResetAll()
+    {
+        PlayerPrefs.DeleteKey(DayKey);
+
+        for (int i = 0; i < Count; i++)
+        {
+            PlayerPrefs.DeleteKey(IdKey + i);
+            PlayerPrefs.DeleteKey(BaseKey + i);
+            PlayerPrefs.DeleteKey(ClaimedKey + i);
+        }
+
+        today = null;
+        loadedDay = 0;
+    }
+
     static MissionTemplate New(string id, PlayerStat stat, int target, int coins, int xp, string polish, string english, bool online = false)
     {
         return new MissionTemplate { id = id, stat = stat, target = target, coins = coins, xp = xp, polish = polish, english = english, online = online };

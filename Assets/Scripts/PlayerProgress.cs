@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 // Liczniki, które gra prowadzi dla gracza (ekran PROFIL).
@@ -51,6 +52,25 @@ public static class PlayerProgress
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
     {
+        stats = null;
+        totalXp = -1;
+        LastRound = default;
+    }
+
+    // Usuwa statystyki, XP (czyli poziom konta) i licznik rund rozegranych każdym skinem.
+    public static void ResetAll(IEnumerable<string> skinLabels)
+    {
+        foreach (PlayerStat stat in Enum.GetValues(typeof(PlayerStat)))
+        {
+            PlayerPrefs.DeleteKey(StatPrefix + stat);
+        }
+
+        foreach (string label in skinLabels)
+        {
+            PlayerPrefs.DeleteKey(SkinRoundsPrefix + label);
+        }
+
+        PlayerPrefs.DeleteKey(XpKey);
         stats = null;
         totalXp = -1;
         LastRound = default;
@@ -254,6 +274,13 @@ public static class PlayerAvatar
 {
     const string SkinKey = "avatar_skin";
     const string ChromaKey = "avatar_chroma";
+
+    // Usuwa wybraną ikonkę profilu (wraca buźka obecnego skina).
+    public static void ResetAll()
+    {
+        PlayerPrefs.DeleteKey(SkinKey);
+        PlayerPrefs.DeleteKey(ChromaKey);
+    }
 
     public static bool Unlocked(string skinLabel, int chroma)
     {

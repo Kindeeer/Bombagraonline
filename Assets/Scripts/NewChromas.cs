@@ -82,6 +82,13 @@ public static class NewChromas
         }
     }
 
+    // Usuwa wszystkie znaczki "nowe" (zerowanie postępu na starcie Play w edytorze, patrz PlayerWallet).
+    public static void ResetAll()
+    {
+        PlayerPrefs.DeleteKey(Key);
+        items = null;
+    }
+
     static void Save()
     {
         PlayerPrefs.SetString(Key, string.Join(";", Items));

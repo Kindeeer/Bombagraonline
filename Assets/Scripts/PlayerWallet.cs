@@ -34,29 +34,32 @@ public static class PlayerWallet
     public static event Action Changed;
 
 #if UNITY_EDITOR
-    // W edytorze każde wciśnięcie Play zaczyna od zera (bez monet i chrom), żeby dało się testować losowanie od początku.
-    // Wyłączysz to w menu Bomb Game > Zachowuj monety i chromy między uruchomieniami Play.
+    // Przełącznik w menu Bomb Game > Zachowaj dane gracza między uruchomieniami Play (zapisany w ustawieniach edytora).
+    // Odznaczony: każdy Play zaczyna od zera (patrz ProgressReset i Editor/ProgressKeeper).
     public const string KeepProgressPref = "BombaGra.KeepWalletInEditor";
+#endif
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    static void ResetForEditorTests()
+    // Usuwa monety i chromy (także założone). Część zapisów ma nazwę skina w kluczu, dlatego potrzebne są nazwy skinów.
+    public static void ResetAll(IEnumerable<string> skinLabels)
     {
-        if (UnityEditor.EditorPrefs.GetBool(KeepProgressPref, false))
-        {
-            return;
-        }
+        HashSet<string> labels = new HashSet<string>(skinLabels);
 
         foreach (string token in PlayerPrefs.GetString(OwnedKey, "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
         {
-            PlayerPrefs.DeleteKey(EquippedKey + token.Split('#')[0]);
+            labels.Add(token.Split('#')[0]);
+        }
+
+        foreach (string label in labels)
+        {
+            PlayerPrefs.DeleteKey(EquippedKey + label);
         }
 
         PlayerPrefs.DeleteKey(OwnedKey);
         PlayerPrefs.DeleteKey(CoinsKey);
         owned = null;
         coins = -1;
+        Changed?.Invoke();
     }
-#endif
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
@@ -88,6 +91,15 @@ public static class PlayerWallet
 
         coins = (int)Math.Min((long)Coins + amount, MaxCoins);
         PlayerProgress.Add(PlayerStat.CoinsEarned, amount);
+        PlayerPrefs.SetInt(CoinsKey, coins);
+        PlayerPrefs.Save();
+        Changed?.Invoke();
+    }
+
+    // Ustawia monety na dokładnie tę liczbę (menu testowe F1). Nie liczy się do statystyki zdobytych monet.
+    public static void SetCoins(int value)
+    {
+        coins = Mathf.Clamp(value, 0, MaxCoins);
         PlayerPrefs.SetInt(CoinsKey, coins);
         PlayerPrefs.Save();
         Changed?.Invoke();
