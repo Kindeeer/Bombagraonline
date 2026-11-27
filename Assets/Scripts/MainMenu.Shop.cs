@@ -64,7 +64,7 @@ public partial class MainMenu
     bool chestTapped;
     TextMeshProUGUI chestTapHint;
 
-    // EDIT: chroma, do której przewinąć listę po wejściu (int.MinValue = żadna), i zwierzak, którego kropki "nowe" znikną po wyjściu
+    // EDIT: chroma, do której przewinąć listę po wejściu (int.MinValue = żadna), i zwierzak, którego wykrzykniki "nowe" znikną po wyjściu
     int editFocusChroma = int.MinValue;
     string editShownSkin;
 
@@ -442,6 +442,8 @@ public partial class MainMenu
 
         System.Text.StringBuilder text = new System.Text.StringBuilder(chest.Info + "\n");
         int[] tenths = RoundToTenths(weights, total);
+        bool epic = weights[(int)ChromaRarity.Epic] > 0f;
+        bool legendary = weights[(int)ChromaRarity.Legendary] > 0f;
 
         foreach (ChromaRarity rarity in order)
         {
@@ -454,6 +456,15 @@ public partial class MainMenu
             string hex = ColorUtility.ToHtmlStringRGB(SkinChroma.RarityColor(rarity) * 0.78f);
             text.Append("\n<b><color=#").Append(hex).Append('>').Append(SkinChroma.RarityName(rarity)).Append("</color></b>  ")
                 .Append(percent.ToString("0.#")).Append('%');
+        }
+
+        // epickie i legendarne wypadają w odłamkach
+        if (epic || legendary)
+        {
+            text.Append("\n<size=80%>").Append(epic && legendary
+                ? Loc.P("Epicka: 2 odłamki, legendarna: 3 odłamki", "Epic: 2 shards, legendary: 3 shards")
+                : epic ? Loc.P("Epicka: 2 odłamki", "Epic: 2 shards") : Loc.P("Legendarna: 3 odłamki", "Legendary: 3 shards"))
+                .Append("</size>");
         }
 
         return text.ToString();
@@ -530,7 +541,8 @@ public partial class MainMenu
         chestTitleFitVersion = Loc.Version;
     }
 
-    // Czerwona kropka "nowe" w prawym górnym rogu obiektu (karta, przycisk). on = false chowa ją.
+    // Znak "nowe" w prawym górnym rogu obiektu (karta, przycisk): czerwony wykrzyknik z białą obwódką, jak ❗.
+    // Emoji nie ma w czcionce gry, więc to zwykły "!" pokolorowany na czerwono. on = false chowa go.
     static void SetNewDot(Transform target, bool on, float size = 34f)
     {
         if (target == null)
@@ -552,20 +564,17 @@ public partial class MainMenu
 
         if (existing == null)
         {
-            Image ring = NewImage("NewDot", target, Color.white, false);
-            ring.sprite = CircleSprite();
-            ring.raycastTarget = false;
-            RectTransform rect = ring.rectTransform;
+            TextMeshProUGUI mark = NewText(target, "!", size * 1.6f, new Color(0.92f, 0.12f, 0.12f, 1f), TextAlignmentOptions.Center, FontStyles.Bold);
+            mark.name = "NewDot";
+            mark.raycastTarget = false;
+            mark.outlineWidth = 0.3f;
+            mark.outlineColor = new Color32(255, 255, 255, 255);
+            RectTransform rect = mark.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = new Vector2(size, size);
-            rect.anchoredPosition = new Vector2(-size * 0.55f, -size * 0.55f);
-
-            Image fill = NewImage("Fill", ring.transform, new Color(0.92f, 0.18f, 0.18f, 1f), false);
-            fill.sprite = CircleSprite();
-            fill.raycastTarget = false;
-            Stretch(fill.rectTransform, size * 0.12f);
-            existing = ring.transform;
+            rect.sizeDelta = new Vector2(size * 1.2f, size * 1.8f);
+            rect.anchoredPosition = new Vector2(-size * 0.6f, -size * 0.8f);
+            existing = mark.transform;
         }
 
         existing.gameObject.SetActive(true);
@@ -752,12 +761,29 @@ public partial class MainMenu
             return;
         }
 
+        // epicka i legendarna wypadają w odłamkach: odłamek trafia do chromy, której odłamki gracz już zbiera (jeśli taka jest)
+        ChromaRarity rarity = art.players[skinIndex].ChromaList[chromaIndex].rarity;
+        int needed = ChromaShards.Needed(rarity);
+
+        if (needed > 1 && ChromaShards.FindStarted(art, chest, rarity, out int startedSkin, out int startedChroma))
+        {
+            skinIndex = startedSkin;
+            chromaIndex = startedChroma;
+        }
+
+        string label = art.players[skinIndex].label;
+        int shards = needed > 1 ? ChromaShards.Add(label, chromaIndex, needed) : 1;
+
         // wygrana jest zapisana od razu, więc nic nie przepada, nawet jeśli ktoś zamknie grę w trakcie animacji
-        PlayerWallet.Unlock(art.players[skinIndex].label, chromaIndex);
-        NewChromas.Mark(art.players[skinIndex].label, chromaIndex);
+        if (shards >= needed)
+        {
+            PlayerWallet.Unlock(label, chromaIndex);
+            NewChromas.Mark(label, chromaIndex);
+        }
+
         GameAudio.Play(AudioEvent.ShopBuy);
         RefreshShop();
-        StartCoroutine(OpenChestRoutine(skinIndex, chromaIndex, chest));
+        StartCoroutine(OpenChestRoutine(skinIndex, chromaIndex, chest, shards, needed));
     }
 
     IEnumerator Wobble(RectTransform rect)
@@ -816,7 +842,7 @@ public partial class MainMenu
             AddEditCard(skin, c, equipped == c, PlayerWallet.Owns(skin.label, c));
         }
 
-        // kropki "nowe" tego zwierzaka widać do wyjścia z EDIT (wtedy znikają, patrz ShowPage)
+        // wykrzykniki "nowe" tego zwierzaka widać do wyjścia z EDIT (wtedy znikają, patrz ShowPage)
         editShownSkin = skin.label;
 
         if (editFocusChroma != int.MinValue)
@@ -1047,12 +1073,20 @@ public partial class MainMenu
 
         string state = equipped ? Loc.T("skin.selected") : owned ? "" : Loc.T("edit.locked");
         Color stateColor = equipped ? new Color(0.10f, 0.45f, 0.15f) : new Color(0.55f, 0.20f, 0.20f);
+        int shardsHave = !owned && !isDefault ? ChromaShards.Get(skin.label, chroma) : 0;
 
         if (!isDefault)
         {
             string rarityName = SkinChroma.RarityName(list[chroma].rarity);
             state = equipped || !owned ? state : rarityName;
             stateColor = equipped ? stateColor : owned ? SkinChroma.RarityColor(list[chroma].rarity) * 0.78f : stateColor;
+
+            // zablokowana chroma z zebranymi odłamkami pokazuje postęp zamiast "ZABLOKOWANY"
+            if (shardsHave > 0)
+            {
+                state = Loc.P("ODŁAMKI ", "SHARDS ") + shardsHave + "/" + ChromaShards.Needed(list[chroma].rarity);
+                stateColor = SkinChroma.RarityColor(list[chroma].rarity) * 0.78f;
+            }
         }
 
         TextMeshProUGUI stateText = NewText(card.transform, state, 28f, stateColor, TextAlignmentOptions.Center, FontStyles.Bold);
@@ -1341,9 +1375,11 @@ public partial class MainMenu
 
     // ---------- Animacja otwierania ----------
 
-    IEnumerator OpenChestRoutine(int skinIndex, int chromaIndex, ChestType chest)
+    // shards / needed: odłamek chromy (np. 1 z 3). Gdy shards >= needed, chroma jest już cała i można ją założyć.
+    IEnumerator OpenChestRoutine(int skinIndex, int chromaIndex, ChestType chest, int shards, int needed)
     {
         chestBusy = true;
+        bool complete = shards >= needed;
         Color glowColor = chest.glow;
 
         GameArt art = GameArt.Instance;
@@ -1442,8 +1478,20 @@ public partial class MainMenu
         ShowFx(ov.cardPreview, chroma.Fx);
         ov.cardName.text = Loc.SkinName(skin.label) + "  " + Loc.ChromaName(chroma);
         ov.cardName.fontSize = 46f;
-        ov.cardRarity.text = SkinChroma.RarityName(chroma.rarity) + "  -  " + Loc.T("chest.new");
+        // odłamek: napis z postępem (ODŁAMEK 1/3), komplet: NOWA! (a przy chromie z odłamków dodatkowo 3/3)
+        ov.cardRarity.text = SkinChroma.RarityName(chroma.rarity) + "  -  " + (complete
+            ? Loc.T("chest.new") + (needed > 1 ? "  " + needed + "/" + needed : "")
+            : Loc.P("ODŁAMEK ", "SHARD ") + shards + "/" + needed);
         ov.cardRarity.color = rarityColor * 0.75f;
+
+        // niekompletna chroma: postać przygaszona, bez efektu chromy, a na niej duży licznik odłamków
+        ov.cardPreview.color = complete ? Color.white : new Color(0.45f, 0.45f, 0.5f, 1f);
+        ShowShardBadge(ov.card, complete ? null : shards + "/" + needed, rarityColor);
+
+        if (!complete)
+        {
+            ShowFx(ov.cardPreview, default);
+        }
         ov.card.gameObject.SetActive(true);
 
         yield return Tween(0.75f, u =>
@@ -1459,7 +1507,8 @@ public partial class MainMenu
         SpawnBurst(rarityColor, 18 + rarityLevel * 10);
         yield return new WaitForSecondsRealtime(0.4f);
 
-        // 5. przyciski i czekanie na wybór
+        // 5. przyciski i czekanie na wybór (odłamka nie da się założyć, więc zostaje sam OK na środku)
+        LayoutResultButtons(ov.buttons, complete);
         ov.buttons.gameObject.SetActive(true);
 
         yield return Tween(0.25f, u => ov.buttons.localScale = Vector3.one * EaseOutBack(u));
@@ -1471,7 +1520,7 @@ public partial class MainMenu
             yield return null;
         }
 
-        if (equipAfterOpen)
+        if (equipAfterOpen && complete)
         {
             PlayerWallet.Equip(skin.label, chromaIndex);
             SkinSelection.Index = skinIndex;
@@ -1487,16 +1536,74 @@ public partial class MainMenu
         });
 
         ShowFx(ov.cardPreview, default);
+        ov.cardPreview.color = Color.white;
+        ShowShardBadge(ov.card, null, Color.white);
         ov.root.gameObject.SetActive(false);
         ClearParticles();
         chestBusy = false;
         RefreshShop();
 
         // ZAŁÓŻ: od razu edycja tego zwierzaka, z listą przewiniętą do nowej chromy
-        if (equipAfterOpen)
+        if (equipAfterOpen && complete)
         {
             editFocusChroma = chromaIndex;
             ShowPage(Page.Edit);
+        }
+    }
+
+    // Duży licznik odłamków na karcie wyniku (np. "1/3"). text = null chowa go.
+    void ShowShardBadge(RectTransform card, string text, Color color)
+    {
+        Transform existing = card.Find("ShardBadge");
+
+        if (text == null)
+        {
+            if (existing != null)
+            {
+                existing.gameObject.SetActive(false);
+            }
+
+            return;
+        }
+
+        TextMeshProUGUI badge;
+
+        if (existing == null)
+        {
+            badge = NewText(card, "", 120f, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+            badge.name = "ShardBadge";
+            badge.raycastTarget = false;
+            badge.outlineWidth = 0.3f;
+            Anchor(badge.rectTransform, 0.05f, 0.40f, 0.95f, 0.80f);
+        }
+        else
+        {
+            badge = existing.GetComponent<TextMeshProUGUI>();
+        }
+
+        badge.text = text;
+        badge.color = Color.Lerp(color, Color.white, 0.35f);
+        badge.outlineColor = new Color32(40, 20, 35, 255);
+        badge.gameObject.SetActive(true);
+        badge.transform.SetAsLastSibling();
+    }
+
+    // Przyciski pod kartą wyniku: ZAŁÓŻ i OK obok siebie, a przy odłamku sam OK na środku.
+    static void LayoutResultButtons(RectTransform buttons, bool canEquip)
+    {
+        RectTransform equip = buttons.Find("Button_ChestEquip") as RectTransform;
+        RectTransform ok = buttons.Find("Button_ChestOk") as RectTransform;
+
+        if (equip != null)
+        {
+            equip.gameObject.SetActive(canEquip);
+        }
+
+        if (ok != null)
+        {
+            ok.anchorMin = new Vector2(canEquip ? 0.52f : 0.27f, 0f);
+            ok.anchorMax = new Vector2(canEquip ? 0.98f : 0.73f, 1f);
+            ok.offsetMin = ok.offsetMax = Vector2.zero;
         }
     }
 

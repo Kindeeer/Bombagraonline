@@ -741,7 +741,7 @@ public partial class MainMenu : MonoBehaviour
         {
             RefreshProfileBadge();
 
-            // kropka "nowe" na SKINS, gdy czeka nieobejrzana chroma
+            // wykrzyknik "nowe" na SKINS, gdy czeka nieobejrzana chroma
             SetNewDot(FindDeep(transform, "Button_Skins"), NewChromas.Any, 44f);
         }
         else if (page == Page.Profile)

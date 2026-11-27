@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Chromy zdobyte ze skrzynki, ale jeszcze nieobejrzane w EDIT. Pokazuje je czerwona kropka "nowe": na przycisku SKINS w menu
-// głównym, na karcie zwierzaka i przy samej chromie w EDIT. Kropki danego zwierzaka znikają, gdy gracz wyjdzie z jego EDIT.
+// Chromy zdobyte ze skrzynki, ale jeszcze nieobejrzane w EDIT. Pokazuje je czerwony wykrzyknik "nowe": na przycisku SKINS w menu
+// głównym, na karcie zwierzaka i przy samej chromie w EDIT. Wykrzykniki danego zwierzaka znikają, gdy gracz wyjdzie z jego EDIT.
 // Zapisane na urządzeniu (PlayerPrefs), tak jak same chromy.
 public static class NewChromas
 {
